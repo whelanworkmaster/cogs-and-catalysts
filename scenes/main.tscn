@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3 uid="uid://b8x7y302a1c4e"]
+
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_km6kn"]
+[ext_resource type="Script" path="res://scripts/world/elevation_area.gd" id="2_t3m6r"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone"]
+size = Vector2(200, 120)
+
+[node name="Main" type="Node2D"]
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(0, 0)
+
+[node name="Player" parent="." instance=ExtResource("1_km6kn")]
+position = Vector2(0, 0)
+
+[node name="ElevationZone" type="Area2D" parent="."]
+position = Vector2(260, 0)
+script = ExtResource("2_t3m6r")
+elevation_level = 1
+
+[node name="ZoneVisual" type="Polygon2D" parent="ElevationZone"]
+color = Color(0.2, 0.8, 1, 0.35)
+polygon = PackedVector2Array(-100, -60, 100, -60, 100, 60, -100, 60)
+
+[node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZone"]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZone/ElevationBlocker"]
+shape = SubResource("RectangleShape2D_elev_zone")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZone"]
+shape = SubResource("RectangleShape2D_elev_zone")

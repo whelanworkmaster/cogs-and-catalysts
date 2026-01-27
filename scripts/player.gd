@@ -2,6 +2,8 @@ extends CharacterBody2D
 
 class_name Player
 
+const ElevationArea = preload("res://scripts/world/elevation_area.gd")
+
 # Movement variables
 @export var speed: float = 750.0
 @export var isometric_factor: float = 0.577  # tan(30°) for isometric projection
@@ -12,6 +14,10 @@ var current_ap: int = 10
 @export var move_ap_cost: int = 1
 @export var ap_regen_per_second: float = 2.0
 var ap_regen_accumulator: float = 0.0
+
+# Elevation tracking
+var current_elevation: int = 0
+@onready var elevation_detector: Area2D = $ElevationDetector
 
 # Movement vectors for 8-way isometric movement
 var movement_vectors = {
@@ -27,6 +33,8 @@ var movement_vectors = {
 
 func _ready():
 	print("Player initialized with ", current_ap, " AP")
+	elevation_detector.area_entered.connect(_on_elevation_area_entered)
+	elevation_detector.area_exited.connect(_on_elevation_area_exited)
 	# Create a basic visual representation
 	create_player_sprite()
 
@@ -112,3 +120,13 @@ func create_player_sprite():
 	color_rect.color = Color.BLUE
 	color_rect.position = Vector2(-16, -16)  # Center the rectangle
 	sprite.add_child(color_rect)
+
+func _on_elevation_area_entered(area: Area2D):
+	if area is ElevationArea:
+		current_elevation = area.elevation_level
+		print("Entered elevation ", current_elevation)
+
+func _on_elevation_area_exited(area: Area2D):
+	if area is ElevationArea and area.elevation_level == current_elevation:
+		current_elevation = 0
+		print("Exited elevation; now ", current_elevation)
