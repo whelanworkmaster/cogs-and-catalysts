@@ -14,6 +14,9 @@ var current_ap: int = 10
 @export var move_ap_cost: int = 1
 @export var ap_regen_per_second: float = 2.0
 var ap_regen_accumulator: float = 0.0
+@export var combat_step_distance: float = 32.0
+@export var combat_move_cooldown: float = 0.2
+var combat_move_cooldown_timer: float = 0.0
 
 # Elevation tracking
 var current_elevation: int = 0
@@ -33,14 +36,18 @@ var movement_vectors = {
 
 func _ready():
 	print("Player initialized with ", current_ap, " AP")
+	add_to_group("player")
 	elevation_detector.area_entered.connect(_on_elevation_area_entered)
 	elevation_detector.area_exited.connect(_on_elevation_area_exited)
+	if CombatManager:
+		CombatManager.turn_started.connect(_on_turn_started)
 	# Create a basic visual representation
 	create_player_sprite()
 
 func _physics_process(delta):
-	regen_ap(delta)
 	handle_turn_input()
+	if combat_move_cooldown_timer > 0.0:
+		combat_move_cooldown_timer = max(0.0, combat_move_cooldown_timer - delta)
 	handle_movement()
 
 func handle_turn_input():
@@ -55,9 +62,10 @@ func handle_turn_input():
 
 func handle_movement():
 	if GameMode and not GameMode.is_exploration():
-		velocity = Vector2.ZERO
-		move_and_slide()
-		return
+		if not CombatManager or not CombatManager.active_combat or CombatManager.get_current_actor() != self:
+			velocity = Vector2.ZERO
+			move_and_slide()
+			return
 
 	var input_direction = Vector2.ZERO
 	
@@ -71,16 +79,25 @@ func handle_movement():
 	if Input.is_action_pressed("ui_right"):
 		input_direction.x += 1
 	
-	# Normalize diagonal movement
+		# Normalize diagonal movement
 	if input_direction != Vector2.ZERO:
 		input_direction = input_direction.normalized()
 		
-		# Check if move is legal (has enough AP)
-		if spend_ap(move_ap_cost):
-			velocity = input_direction * speed
-		else:
+		var requires_ap := CombatManager and CombatManager.active_combat
+		if requires_ap:
+			if combat_move_cooldown_timer > 0.0:
+				velocity = Vector2.ZERO
+				move_and_slide()
+				return
+			# Check if move is legal (has enough AP)
+			if spend_ap(move_ap_cost):
+				global_position += input_direction * combat_step_distance
+				combat_move_cooldown_timer = combat_move_cooldown
+			else:
+				print("Not enough AP to move!")
 			velocity = Vector2.ZERO
-			print("Not enough AP to move!")
+		else:
+			velocity = input_direction * speed
 	else:
 		velocity = Vector2.ZERO
 	
@@ -132,6 +149,10 @@ func get_current_ap() -> int:
 
 func get_max_ap() -> int:
 	return max_ap
+
+func _on_turn_started(actor: Node) -> void:
+	if actor == self:
+		reset_ap()
 
 func create_player_sprite():
 	"""Creates a basic colored rectangle as the player sprite."""

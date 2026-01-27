@@ -3,12 +3,12 @@ extends CharacterBody2D
 class_name Enemy
 
 @export var max_ap: int = 6
+@export var move_step: float = 32.0
 var current_ap: int = 6
+@onready var ai = $AI
 
 func _ready() -> void:
 	_create_enemy_sprite()
-	if CombatManager:
-		CombatManager.turn_started.connect(_on_turn_started)
 
 func _create_enemy_sprite() -> void:
 	var sprite := $Sprite2D
@@ -18,16 +18,20 @@ func _create_enemy_sprite() -> void:
 	color_rect.position = Vector2(-14, -14)
 	sprite.add_child(color_rect)
 
-func _on_turn_started(actor: Node) -> void:
-	if actor != self:
-		return
-	get_tree().create_timer(0.6).timeout.connect(func ():
-		if CombatManager and CombatManager.get_current_actor() == self:
-			CombatManager.end_turn()
-	)
+func move_towards(target_position: Vector2, distance: float = 0.0) -> void:
+	var step := distance if distance > 0.0 else move_step
+	var direction := (target_position - global_position).normalized()
+	global_position += direction * step
+
+func end_turn() -> void:
+	if CombatManager:
+		CombatManager.end_turn()
 
 func get_current_ap() -> int:
 	return current_ap
 
 func get_max_ap() -> int:
 	return max_ap
+
+func get_ai() -> Node:
+	return ai

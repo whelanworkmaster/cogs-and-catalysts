@@ -1,6 +1,7 @@
-[gd_scene format=3 uid="uid://c6d45ey1whev"]
+[gd_scene load_steps=3 format=3 uid="uid://c6d45ey1whev"]
 
 [ext_resource type="Script" path="res://scripts/actors/enemy.gd" id="1_1q8s0"]
+[ext_resource type="Script" path="res://scripts/ai/enemy_ai.gd" id="2_0g3w7"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_9g8r1"]
 size = Vector2(28, 28)
@@ -12,3 +13,6 @@ script = ExtResource("1_1q8s0")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_9g8r1")
+
+[node name="AI" type="Node" parent="."]
+script = ExtResource("2_0g3w7")
