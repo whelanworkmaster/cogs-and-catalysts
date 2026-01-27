@@ -1,7 +1,10 @@
-[gd_scene load_steps=4 format=3 uid="uid://b8x7y302a1c4e"]
+[gd_scene load_steps=7 format=3 uid="uid://b8x7y302a1c4e"]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_km6kn"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="2_1q8s0"]
+[ext_resource type="PackedScene" path="res://scenes/engagement_trigger.tscn" id="2_5k8k1"]
 [ext_resource type="Script" path="res://scripts/world/elevation_area.gd" id="2_t3m6r"]
+[ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="3_2h1x5"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone"]
 size = Vector2(200, 120)
@@ -13,6 +16,15 @@ position = Vector2(0, 0)
 
 [node name="Player" parent="." instance=ExtResource("1_km6kn")]
 position = Vector2(0, 0)
+
+[node name="Enemy" parent="." instance=ExtResource("2_1q8s0")]
+position = Vector2(0, 280)
+
+[node name="EngagementTrigger" parent="." instance=ExtResource("2_5k8k1")]
+position = Vector2(0, 200)
+actor_paths = [NodePath("../Enemy")]
+
+[node name="CombatHUD" parent="." instance=ExtResource("3_2h1x5")]
 
 [node name="ElevationZone" type="Area2D" parent="."]
 position = Vector2(260, 0)

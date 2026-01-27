@@ -40,7 +40,18 @@ func _ready():
 
 func _physics_process(delta):
 	regen_ap(delta)
+	handle_turn_input()
 	handle_movement()
+
+func handle_turn_input():
+	if not CombatManager:
+		return
+	if not CombatManager.active_combat:
+		return
+	if CombatManager.get_current_actor() != self:
+		return
+	if Input.is_action_just_pressed("ui_accept"):
+		CombatManager.end_turn()
 
 func handle_movement():
 	if GameMode and not GameMode.is_exploration():
@@ -115,6 +126,12 @@ func reset_ap():
 	"""Resets Action Points to maximum."""
 	current_ap = max_ap
 	print("AP reset to ", current_ap, "/", max_ap)
+
+func get_current_ap() -> int:
+	return current_ap
+
+func get_max_ap() -> int:
+	return max_ap
 
 func create_player_sprite():
 	"""Creates a basic colored rectangle as the player sprite."""
