@@ -43,6 +43,11 @@ func _physics_process(delta):
 	handle_movement()
 
 func handle_movement():
+	if GameMode and not GameMode.is_exploration():
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
 	var input_direction = Vector2.ZERO
 	
 	# Get input for 8-way movement

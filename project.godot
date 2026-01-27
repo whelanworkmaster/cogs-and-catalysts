@@ -15,6 +15,11 @@ config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 run/main_scene="res://scenes/main.tscn"
 
+[autoload]
+
+GameMode="*res://scripts/systems/game_mode_controller.gd"
+CombatManager="*res://scripts/systems/combat_manager.gd"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"
