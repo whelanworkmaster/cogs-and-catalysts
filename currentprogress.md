@@ -1,24 +1,29 @@
 # Current Progress - Cogs & Catalyst
 
 ## Overall Plan (High Level)
-1) Foundation
-   - Core scenes: Main, Player, World.
+1) Foundation (Godot 4.x)
+   - Core scenes: Main, Player, World, Combat HUD.
    - Movement + elevation handling (isometric + fake Z).
    - Data-driven setup (Resources for stats, abilities, mutations).
 
-2) Combat Loop
-   - Exploration to combat transition (engagement trigger).
-   - Turn-based combat manager (turn order, AP spend).
-   - Simple AI roles and environment interactions.
+2) LUMEN Combat Loop
+   - Deterministic hits (no to-hit roll).
+   - AP economy + Body Strain as a persistent cost.
+   - Drops: Mutagenic Cells fuel abilities.
 
-3) Progression
-   - Organ slots + mutation inventory.
-   - Toxicity / strain management and debuffs.
+3) FitD Meta Systems
+   - Visual Clocks (Detection, Toxicity, Vault, Reinforcement).
+   - Faction tiers + district/shop unlocks.
+   - Position & Effect framing for risky interactions.
 
-4) MVP Slice: "Mercury Vault"
-   - One vertical city block.
-   - Combat transition + one boss encounter.
-   - Basic mutation slot and UI.
+4) Internal Rig (Biological Architecture)
+   - Organ slot loadout at heist start.
+   - Mutagens as "classes" granting moves.
+
+5) MVP Slice: "Mercury Vault"
+   - Safehouse -> Heist loop.
+   - One tactical floor with a hazard interaction.
+   - Extraction race vs. clocks.
 
 ## Where We Are Now
 - Project structure refactored (`scenes/`, `scripts/`, `scripts/world`, `scripts/systems`, `scripts/ai`, `scripts/ui`, `scripts/actors`).
@@ -47,29 +52,30 @@
 - `scenes/main.tscn`, `scenes/player.tscn`, `scenes/enemy.tscn`, `scenes/engagement_trigger.tscn`, `scenes/ui/combat_hud.tscn`
 
 ## Next Steps (Suggested Order)
-1) Combat input polish
-   - Add explicit grid or tile-based movement for combat.
-   - Prevent sliding in combat; snap to grid per AP spend.
+1) LUMEN combat basics
+   - Implement deterministic damage (attack always hits if in range + AP spent).
+   - Centralize AP costs for move/attack/ability.
+   - Add Mutagenic Cells drop on enemy death.
 
-2) Enemy AI expansion
-   - Add `Attack` state with simple range check.
-   - Add `Reposition` state for flanking or hazard avoidance.
+2) FitD clocks (UI + logic)
+   - Clock resource + ProgressBar UI for 4/6/8 segments.
+   - Detection + Toxicity clocks with simple tick rules.
 
-3) AP + Actions
-   - Centralize AP costs for movement + abilities.
-   - Add a basic "Attack" action with AP cost.
+3) Internal Rig loadout
+   - Organ slot loadout selection at heist start.
+   - One mutagen (Hydraulic Leg or Tendrils) with 1-2 moves.
 
-4) Combat UI
-   - Add End Turn button / input hint.
-   - Show AP max, health, strain.
+4) Position & Effect framing
+   - Simple pre-interaction UI (Controlled/Risky/Desperate).
+   - Hook outcomes to clock ticks or glitches.
 
-5) World / Verticality
-   - Add climbable links, elevation restrictions.
-   - Expand elevation areas to 2-3 levels.
+5) Factions + tiers
+   - Dictionary for faction tiers (-3 to +3).
+   - Tie tier to shop inventory or district layout toggle.
 
-6) Progression systems
-   - Create `Mutation` resource + slot UI.
-   - Add one mutation that modifies stats or grants an ability.
+6) MVP "Mercury Vault" slice
+   - One tactical floor with a steam vent hazard.
+   - Vault + Reinforcement clocks driving extraction.
 
 ## Notes
 - Combat movement currently uses a cooldown to prevent AP burn when holding a key.
