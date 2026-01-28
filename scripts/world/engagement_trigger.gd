@@ -22,5 +22,5 @@ func _on_body_entered(body: Node) -> void:
 					actors.append(actor)
 			CombatManager.start_combat(actors)
 		if one_shot:
-			monitoring = false
-			monitorable = false
+			set_deferred("monitoring", false)
+			set_deferred("monitorable", false)

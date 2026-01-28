@@ -20,6 +20,34 @@ config/icon="res://icon.svg"
 GameMode="*res://scripts/systems/game_mode_controller.gd"
 CombatManager="*res://scripts/systems/combat_manager.gd"
 
+[input]
+
+attack={
+"deadzone": 0.5,
+"events": [ {
+"type": "InputEventKey",
+"device": -1,
+"keycode": 70,
+"physical_keycode": 70,
+"unicode": 70,
+"location": 0,
+"modifiers": 0
+} ]
+}
+
+end_turn={
+"deadzone": 0.5,
+"events": [ {
+"type": "InputEventKey",
+"device": -1,
+"keycode": 32,
+"physical_keycode": 32,
+"unicode": 32,
+"location": 0,
+"modifiers": 0
+} ]
+}
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

@@ -17,6 +17,9 @@ offset_bottom = 120.0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
 
+[node name="ControlLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Controls: Move=Arrows/WASD  Attack=F  End Turn=Space"
+
 [node name="ModeLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 text = "Mode: Unknown"
 
@@ -25,3 +28,18 @@ text = "Turn: None"
 
 [node name="APLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 text = "AP: -"
+
+[node name="StateLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "State: -"
+
+[node name="EnemyHPLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Enemy HP: -"
+
+[node name="DamageLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Last Damage: -"
+
+[node name="RangeLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Range: -"
+
+[node name="AttackLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Attack: -"
