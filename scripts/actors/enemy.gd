@@ -12,6 +12,8 @@ const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
 @export var move_step: float = 32.0
 @export var attack_contact_distance: float = 40.0
 @export var attack_damage: int = 2
+@export var ranged_attack_range: float = 240.0
+@export var ranged_attack_damage: int = 2
 var current_ap: int = 0
 var current_hp: int = 0
 @onready var ai = $AI
@@ -88,6 +90,49 @@ func attack(target: Node) -> void:
 	if target.has_method("take_damage"):
 		target.take_damage(attack_damage, self)
 
+func can_attack_ranged(target: Node) -> bool:
+	if not target:
+		return false
+	if global_position.distance_to(target.global_position) > ranged_attack_range:
+		return false
+	return _has_clear_shot(target)
+
+func ranged_attack(target: Node) -> void:
+	if not target:
+		return
+	if not _has_clear_shot(target):
+		return
+	_spawn_ranged_shot_line(target.global_position)
+	if target.has_method("take_damage"):
+		target.take_damage(ranged_attack_damage, self)
+
+func _has_clear_shot(target: Node) -> bool:
+	var space := get_world_2d().direct_space_state if get_world_2d() else null
+	if not space:
+		return true
+	var query := PhysicsRayQueryParameters2D.create(global_position, target.global_position)
+	query.exclude = [self]
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	var result := space.intersect_ray(query)
+	if result.is_empty():
+		return true
+	return result.collider == target
+
+func _spawn_ranged_shot_line(target_pos: Vector2) -> void:
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	var line := Line2D.new()
+	line.width = 2.0
+	line.default_color = Color(1.0, 0.6, 0.2, 0.9)
+	line.points = PackedVector2Array([global_position, target_pos])
+	line.z_index = 6
+	scene.add_child(line)
+	var tween := create_tween()
+	tween.tween_property(line, "modulate:a", 0.0, 0.12)
+	tween.tween_callback(line.queue_free)
+
 func end_turn() -> void:
 	if CombatManager:
 		CombatManager.end_turn()
@@ -115,6 +160,9 @@ func get_max_hp() -> int:
 
 func get_attack_contact_distance() -> float:
 	return attack_contact_distance
+
+func get_ranged_attack_range() -> float:
+	return ranged_attack_range
 
 func get_attack_targets() -> Array:
 	if not attack_area:

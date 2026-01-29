@@ -1,10 +1,11 @@
-[gd_scene load_steps=7 format=3 uid="uid://b8x7y302a1c4e"]
+[gd_scene load_steps=10 format=3 uid="uid://b8x7y302a1c4e"]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_km6kn"]
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="2_1q8s0"]
 [ext_resource type="Script" path="res://scripts/world/elevation_area.gd" id="2_t3m6r"]
 [ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="3_2h1x5"]
 [ext_resource type="Script" path="res://scripts/world/main.gd" id="4_main"]
+[ext_resource type="Script" path="res://scripts/world/steam_vent.gd" id="5_steam_vent"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone"]
 size = Vector2(200, 120)
@@ -14,6 +15,9 @@ size = Vector2(140, 80)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone_tall"]
 size = Vector2(120, 180)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_steam_vent"]
+size = Vector2(60, 40)
 
 [node name="Main" type="Node2D"]
 script = ExtResource("4_main")
@@ -108,3 +112,24 @@ shape = SubResource("RectangleShape2D_elev_zone_tall")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneTall"]
 shape = SubResource("RectangleShape2D_elev_zone_tall")
+
+[node name="SteamVent" type="Area2D" parent="."]
+position = Vector2(-140, 180)
+script = ExtResource("5_steam_vent")
+damage_amount = 0
+toxicity_ticks = 1
+
+[node name="VentRim" type="Polygon2D" parent="SteamVent"]
+color = Color(0.55, 0.3, 0.1, 0.9)
+polygon = PackedVector2Array(-32, -22, 32, -22, 32, 22, -32, 22)
+
+[node name="VentGlow" type="Polygon2D" parent="SteamVent"]
+color = Color(1, 0.6, 0.2, 0.45)
+polygon = PackedVector2Array(-26, -16, 26, -16, 26, 16, -26, 16)
+
+[node name="VentSteam" type="Polygon2D" parent="SteamVent"]
+color = Color(0.9, 0.95, 1, 0.35)
+polygon = PackedVector2Array(-18, -26, 18, -26, 24, -10, -24, -10)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="SteamVent"]
+shape = SubResource("RectangleShape2D_steam_vent")

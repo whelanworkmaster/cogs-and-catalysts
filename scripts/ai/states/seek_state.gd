@@ -20,16 +20,23 @@ func tick(owner: Node, _delta: float) -> void:
 	if not player:
 		_end_turn(owner)
 		return
+	var attack_range := 0.0
+	if owner.has_method("get_ranged_attack_range"):
+		attack_range = float(owner.get_ranged_attack_range())
+	elif owner.has_method("can_attack_ranged"):
+		attack_range = 0.0
 	var ap_budget := 0
 	if owner.has_method("get_max_ap"):
 		ap_budget = int(floor(owner.get_max_ap() * 0.5))
 	var max_steps := 12
 	var steps_taken := 0
 	while steps_taken < max_steps and ap_budget > 0:
-		var targets: Array = []
-		if owner.has_method("get_attack_targets"):
-			targets = owner.get_attack_targets()
-		if not targets.is_empty():
+		var in_range := false
+		if owner.has_method("can_attack_ranged"):
+			in_range = owner.can_attack_ranged(player)
+		elif attack_range > 0.0:
+			in_range = owner.global_position.distance_to(player.global_position) <= attack_range
+		if in_range:
 			var can_attack := true
 			if CombatManager:
 				var ap_cost := CombatManager.get_ap_cost("attack")
@@ -39,9 +46,10 @@ func tick(owner: Node, _delta: float) -> void:
 					can_attack = owner.spend_ap(ap_cost)
 				if can_attack:
 					ap_budget -= ap_cost
-			if can_attack and owner.has_method("attack"):
-				owner.attack(targets[0])
-				print("Enemy attack on overlap target.")
+			if can_attack and owner.has_method("ranged_attack"):
+				owner.ranged_attack(player)
+				steps_taken += 1
+				continue
 			break
 		var can_move := true
 		if CombatManager:
@@ -56,7 +64,6 @@ func tick(owner: Node, _delta: float) -> void:
 			break
 		if owner.has_method("move_towards"):
 			owner.move_towards(player.global_position, ai.step_distance)
-			print("Enemy move toward player.")
 		steps_taken += 1
 	_moved = true
 	_end_turn(owner)

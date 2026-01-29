@@ -61,14 +61,12 @@ func _build_astar_grid() -> void:
 	_astar.cell_size = grid_cell_size
 	_astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
 	_astar.update()
-	print("AStarGrid2D: region=", region, " cell_size=", grid_cell_size, " origin=", _grid_origin)
 	var obstacles := get_tree().get_nodes_in_group("nav_obstacle")
 	if obstacles.is_empty():
 		var root := get_tree().current_scene
 		if root:
 			obstacles = root.find_children("", "Area2D", true, false)
 			obstacles = obstacles.filter(func(node): return node.has_node("ElevationBlocker"))
-	print("AStarGrid2D: obstacles=", obstacles.size())
 	for obstacle in obstacles:
 		var zone := obstacle as Node2D
 		if not zone:
@@ -83,13 +81,11 @@ func _build_astar_grid() -> void:
 		var scale: Vector2 = shape_node.global_transform.get_scale().abs()
 		var size: Vector2 = rect_shape.size * scale
 		var rect := Rect2(world_center - size * 0.5, size)
-		print("AStarGrid2D: obstacle rect=", rect)
 		_mark_rect_solid(rect)
 
 func _mark_rect_solid(rect: Rect2) -> void:
 	var start: Vector2i = _world_to_cell(rect.position)
 	var end: Vector2i = _world_to_cell(rect.position + rect.size)
-	print("AStarGrid2D: mark solid start=", start, " end=", end)
 	for y in range(start.y, end.y + 1):
 		for x in range(start.x, end.x + 1):
 			var cell := Vector2i(x, y)
@@ -106,18 +102,46 @@ func _cell_to_world(cell: Vector2i) -> Vector2:
 func get_astar_path(from_world: Vector2, to_world: Vector2) -> PackedVector2Array:
 	var start: Vector2i = _world_to_cell(from_world)
 	var end: Vector2i = _world_to_cell(to_world)
-	print("AStarGrid2D: request from=", from_world, " to=", to_world, " start=", start, " end=", end)
+	start = _clamp_cell_to_bounds(start)
+	end = _clamp_cell_to_bounds(end)
 	if not _astar.is_in_boundsv(start) or not _astar.is_in_boundsv(end):
-		print("AStarGrid2D: out of bounds start/end")
 		return PackedVector2Array()
-	if _astar.is_point_solid(start) or _astar.is_point_solid(end):
-		print("AStarGrid2D: start/end solid start_solid=", _astar.is_point_solid(start), " end_solid=", _astar.is_point_solid(end))
+	if _astar.is_point_solid(start):
+		var fixed_start := _find_nearest_walkable(start)
+		if _astar.is_in_boundsv(fixed_start):
+			start = fixed_start
+	if _astar.is_point_solid(end):
+		var fixed_end := _find_nearest_walkable(end)
+		if _astar.is_in_boundsv(fixed_end):
+			end = fixed_end
 	var cell_path := _astar.get_id_path(start, end)
 	var world_path := PackedVector2Array()
 	for cell in cell_path:
 		world_path.append(_cell_to_world(cell))
-	print("AStarGrid2D: path cells=", cell_path.size(), " world_points=", world_path.size())
 	return world_path
+
+func _clamp_cell_to_bounds(cell: Vector2i) -> Vector2i:
+	if not _astar or _astar.region.size.length_squared() == 0.0:
+		return cell
+	var min_cell := _world_to_cell(_astar.region.position)
+	var max_cell := _world_to_cell(_astar.region.position + _astar.region.size)
+	return Vector2i(
+		clampi(cell.x, min_cell.x, max_cell.x),
+		clampi(cell.y, min_cell.y, max_cell.y)
+	)
+
+func _find_nearest_walkable(origin: Vector2i, max_radius: int = 10) -> Vector2i:
+	if _astar.is_in_boundsv(origin) and not _astar.is_point_solid(origin):
+		return origin
+	for radius in range(1, max_radius + 1):
+		for y in range(-radius, radius + 1):
+			for x in range(-radius, radius + 1):
+				if abs(x) != radius and abs(y) != radius:
+					continue
+				var cell := Vector2i(origin.x + x, origin.y + y)
+				if _astar.is_in_boundsv(cell) and not _astar.is_point_solid(cell):
+					return cell
+	return origin
 
 func _build_obstacle_outline(zone: Node2D) -> PackedVector2Array:
 	var shape_node := zone.get_node_or_null("ElevationBlocker/CollisionShape2D")
