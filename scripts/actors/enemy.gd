@@ -7,6 +7,8 @@ const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
 @export var max_hp: int = 8
 @export var max_ap: int = 6
 @export var move_step: float = 32.0
+@export var attack_contact_distance: float = 40.0
+@export var attack_damage: int = 2
 var current_ap: int = 6
 var current_hp: int = 0
 @onready var ai = $AI
@@ -29,6 +31,12 @@ func move_towards(target_position: Vector2, distance: float = 0.0) -> void:
 	var direction := (target_position - global_position).normalized()
 	global_position += direction * step
 
+func attack(target: Node) -> void:
+	if not target:
+		return
+	if target.has_method("take_damage"):
+		target.take_damage(attack_damage, self)
+
 func end_turn() -> void:
 	if CombatManager:
 		CombatManager.end_turn()
@@ -44,6 +52,9 @@ func get_current_hp() -> int:
 
 func get_max_hp() -> int:
 	return max_hp
+
+func get_attack_contact_distance() -> float:
+	return attack_contact_distance
 
 func get_ai() -> Node:
 	return ai

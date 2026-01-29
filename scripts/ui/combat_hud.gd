@@ -9,12 +9,15 @@ extends CanvasLayer
 @onready var damage_label: Label = $MarginContainer/VBoxContainer/DamageLabel
 @onready var range_label: Label = $MarginContainer/VBoxContainer/RangeLabel
 @onready var attack_label: Label = $MarginContainer/VBoxContainer/AttackLabel
+@onready var detection_clock_label: Label = $MarginContainer/VBoxContainer/DetectionClockLabel
+@onready var toxicity_clock_label: Label = $MarginContainer/VBoxContainer/ToxicityClockLabel
 
 func _ready() -> void:
 	_refresh_mode()
 	_refresh_actor()
 	_refresh_controls()
 	_refresh_state()
+	_refresh_clocks()
 	if GameMode:
 		GameMode.mode_changed.connect(_on_mode_changed)
 	if CombatManager:
@@ -27,6 +30,7 @@ func _process(_delta: float) -> void:
 	_refresh_ap()
 	_refresh_state()
 	_refresh_enemy_status()
+	_refresh_clocks()
 
 func _on_mode_changed(_new_mode: int, _previous_mode: int) -> void:
 	_refresh_mode()
@@ -85,6 +89,16 @@ func _refresh_state() -> void:
 	var actor_state := "Actor: %s" % actor_name
 	var combat_state := "Combat: %s" % ("Active" if combat_active else "Idle")
 	state_label.text = "%s  %s  %s" % [combat_state, actor_state, ap_costs]
+
+func _refresh_clocks() -> void:
+	if CombatManager and CombatManager.detection_clock:
+		detection_clock_label.text = CombatManager.detection_clock.to_display()
+	else:
+		detection_clock_label.text = "Detection: -"
+	if CombatManager and CombatManager.toxicity_clock:
+		toxicity_clock_label.text = CombatManager.toxicity_clock.to_display()
+	else:
+		toxicity_clock_label.text = "Toxicity: -"
 
 func _refresh_enemy_status() -> void:
 	var player: Node = get_tree().get_first_node_in_group("player")

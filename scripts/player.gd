@@ -100,6 +100,7 @@ func handle_movement():
 			if spend_ap(_get_ap_cost("move")):
 				global_position += input_direction * combat_step_distance
 				combat_move_cooldown_timer = combat_move_cooldown
+				_tick_detection()
 			else:
 				print("Not enough AP to move!")
 			velocity = Vector2.ZERO
@@ -139,6 +140,7 @@ func handle_attack_input() -> void:
 		last_damage_dealt = attack_damage
 		last_attack_result = "Hit for %s" % attack_damage
 		print("Attack hit for ", attack_damage)
+		_tick_detection()
 
 func apply_isometric_transform(direction: Vector2) -> Vector2:
 	# Convert standard 2D movement to isometric projection
@@ -213,6 +215,17 @@ func get_attack_contact_distance() -> float:
 
 func get_last_attack_result() -> String:
 	return last_attack_result
+
+func take_damage(amount: int, source: Node = null) -> void:
+	if amount <= 0:
+		return
+	print("%s took %s damage." % [name, amount])
+	if CombatManager:
+		CombatManager.tick_toxicity(1)
+
+func _tick_detection() -> void:
+	if CombatManager:
+		CombatManager.tick_detection(1)
 
 func _ensure_input_actions() -> void:
 	if not InputMap.has_action("attack"):

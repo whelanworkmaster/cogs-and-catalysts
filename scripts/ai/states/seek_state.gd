@@ -20,8 +20,20 @@ func tick(owner: Node, _delta: float) -> void:
 	if not player:
 		_end_turn(owner)
 		return
+	var distance: float = owner.global_position.distance_to(player.global_position)
+	var attack_distance: float = 0.0
+	if owner.has_method("get_attack_contact_distance"):
+		attack_distance = owner.get_attack_contact_distance()
+	if attack_distance > 0.0 and distance <= attack_distance:
+		if owner.has_method("attack"):
+			owner.attack(player)
+			print("Enemy attack for contact distance ", attack_distance)
+		_moved = true
+		_end_turn(owner)
+		return
 	if owner.has_method("move_towards"):
 		owner.move_towards(player.global_position, ai.step_distance)
+		print("Enemy move toward player.")
 	_moved = true
 	_end_turn(owner)
 
