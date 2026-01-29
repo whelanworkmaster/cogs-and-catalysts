@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://b8x7y302a1c4e"]
+[gd_scene load_steps=11 format=3 uid="uid://b8x7y302a1c4e"]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_km6kn"]
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="2_1q8s0"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="3_2h1x5"]
 [ext_resource type="Script" path="res://scripts/world/main.gd" id="4_main"]
 [ext_resource type="Script" path="res://scripts/world/steam_vent.gd" id="5_steam_vent"]
+[ext_resource type="PackedScene" path="res://scenes/ui/game_over.tscn" id="6_game_over"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone"]
 size = Vector2(200, 120)
@@ -21,6 +22,7 @@ size = Vector2(60, 40)
 
 [node name="Main" type="Node2D"]
 script = ExtResource("4_main")
+debug_procgen = true
 
 [node name="NavigationRegion2D" type="NavigationRegion2D" parent="."]
 
@@ -34,6 +36,8 @@ position = Vector2(0, 0)
 position = Vector2(0, 280)
 
 [node name="CombatHUD" parent="." instance=ExtResource("3_2h1x5")]
+
+[node name="GameOver" parent="." instance=ExtResource("6_game_over")]
 
 [node name="ElevationZone" type="Area2D" parent="."]
 position = Vector2(260, 0)
@@ -118,6 +122,7 @@ position = Vector2(-140, 180)
 script = ExtResource("5_steam_vent")
 damage_amount = 0
 toxicity_ticks = 1
+groups = ["steam_vent"]
 
 [node name="VentRim" type="Polygon2D" parent="SteamVent"]
 color = Color(0.55, 0.3, 0.1, 0.9)

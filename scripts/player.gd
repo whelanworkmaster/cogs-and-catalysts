@@ -28,6 +28,8 @@ var last_damage_taken: int = 0
 var last_damage_source: String = "-"
 var mutagenic_cells: int = 0
 var _hit_tween: Tween
+var _death_tween: Tween
+var _is_dead: bool = false
 
 enum Stance { NEUTRAL, GUARD, AGGRESS, EVADE }
 @export var stance_ap_cost: int = 1
@@ -68,6 +70,10 @@ func _ready():
 	create_player_sprite()
 
 func _physics_process(delta):
+	if _is_dead:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
 	handle_stance_input()
 	handle_turn_input()
 	if combat_move_cooldown_timer > 0.0:
@@ -133,6 +139,8 @@ func handle_movement():
 	move_and_slide()
 
 func handle_attack_input() -> void:
+	if _is_dead:
+		return
 	if not CombatManager:
 		last_attack_result = "No CombatManager"
 		return
@@ -246,6 +254,8 @@ func get_last_attack_result() -> String:
 func take_damage(amount: int, source: Node = null) -> void:
 	if amount <= 0:
 		return
+	if _is_dead:
+		return
 	var reduced_amount: int = int(max(amount - _get_damage_reduction(), 0))
 	current_hp = max(current_hp - reduced_amount, 0)
 	last_damage_taken = reduced_amount
@@ -256,7 +266,17 @@ func take_damage(amount: int, source: Node = null) -> void:
 	if CombatManager:
 		CombatManager.tick_toxicity(1)
 	if current_hp <= 0:
-		print("%s is down." % name)
+		_die()
+
+func _die() -> void:
+	if _is_dead:
+		return
+	_is_dead = true
+	print("%s is down." % name)
+	if CombatManager:
+		CombatManager.end_combat()
+	_play_death_effect()
+	_show_game_over()
 
 func _tick_detection() -> void:
 	if CombatManager:
@@ -461,6 +481,26 @@ func _play_hit_feedback() -> void:
 			var base_color: Color = rect.color
 			_hit_tween.parallel().tween_property(rect, "color", Color(1.0, 1.0, 1.0), 0.05)
 			_hit_tween.tween_property(rect, "color", base_color, 0.08)
+
+func _play_death_effect() -> void:
+	if not has_node("Sprite2D"):
+		return
+	var sprite := $Sprite2D
+	if _death_tween and _death_tween.is_running():
+		_death_tween.kill()
+	_death_tween = create_tween()
+	_death_tween.tween_property(sprite, "scale", Vector2(1.15, 0.9), 0.08)
+	_death_tween.parallel().tween_property(sprite, "modulate", Color(1.0, 0.2, 0.2, 1.0), 0.08)
+	_death_tween.tween_property(sprite, "scale", Vector2(0.1, 0.1), 0.2)
+	_death_tween.parallel().tween_property(sprite, "modulate:a", 0.0, 0.2)
+
+func _show_game_over() -> void:
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	var overlay := scene.get_node_or_null("GameOver")
+	if overlay and overlay.has_method("show_game_over"):
+		overlay.show_game_over()
 
 func _spawn_damage_popup(amount: int, color: Color) -> void:
 	var scene := get_tree().current_scene if get_tree() else null
