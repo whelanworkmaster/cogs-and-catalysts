@@ -2,14 +2,23 @@
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_km6kn"]
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="2_1q8s0"]
-[ext_resource type="PackedScene" path="res://scenes/engagement_trigger.tscn" id="2_5k8k1"]
 [ext_resource type="Script" path="res://scripts/world/elevation_area.gd" id="2_t3m6r"]
 [ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="3_2h1x5"]
+[ext_resource type="Script" path="res://scripts/world/main.gd" id="4_main"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone"]
 size = Vector2(200, 120)
 
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone_small"]
+size = Vector2(140, 80)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone_tall"]
+size = Vector2(120, 180)
+
 [node name="Main" type="Node2D"]
+script = ExtResource("4_main")
+
+[node name="NavigationRegion2D" type="NavigationRegion2D" parent="."]
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(0, 0)
@@ -20,19 +29,24 @@ position = Vector2(0, 0)
 [node name="Enemy" parent="." instance=ExtResource("2_1q8s0")]
 position = Vector2(0, 280)
 
-[node name="EngagementTrigger" parent="." instance=ExtResource("2_5k8k1")]
-position = Vector2(0, 200)
-actor_paths = [NodePath("../Enemy")]
-
 [node name="CombatHUD" parent="." instance=ExtResource("3_2h1x5")]
 
 [node name="ElevationZone" type="Area2D" parent="."]
 position = Vector2(260, 0)
 script = ExtResource("2_t3m6r")
 elevation_level = 1
+groups = ["nav_obstacle"]
+
+[node name="ZoneShadow" type="Polygon2D" parent="ElevationZone"]
+color = Color(0.0, 0.0, 0.0, 0.18)
+polygon = PackedVector2Array(-84, -50, 116, -50, 116, 70, -84, 70)
+
+[node name="ZoneSide" type="Polygon2D" parent="ElevationZone"]
+color = Color(0.1, 0.45, 0.6, 0.6)
+polygon = PackedVector2Array(-100, 60, 100, 60, 116, 70, -84, 70)
 
 [node name="ZoneVisual" type="Polygon2D" parent="ElevationZone"]
-color = Color(0.2, 0.8, 1, 0.35)
+color = Color(0.2, 0.8, 1, 0.55)
 polygon = PackedVector2Array(-100, -60, 100, -60, 100, 60, -100, 60)
 
 [node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZone"]
@@ -42,3 +56,55 @@ shape = SubResource("RectangleShape2D_elev_zone")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZone"]
 shape = SubResource("RectangleShape2D_elev_zone")
+
+[node name="ElevationZoneSmall" type="Area2D" parent="."]
+position = Vector2(-260, -40)
+script = ExtResource("2_t3m6r")
+elevation_level = 1
+groups = ["nav_obstacle"]
+
+[node name="ZoneShadow" type="Polygon2D" parent="ElevationZoneSmall"]
+color = Color(0.0, 0.0, 0.0, 0.18)
+polygon = PackedVector2Array(-58, -32, 82, -32, 82, 48, -58, 48)
+
+[node name="ZoneSide" type="Polygon2D" parent="ElevationZoneSmall"]
+color = Color(0.1, 0.45, 0.6, 0.6)
+polygon = PackedVector2Array(-70, 40, 70, 40, 82, 48, -58, 48)
+
+[node name="ZoneVisual" type="Polygon2D" parent="ElevationZoneSmall"]
+color = Color(0.2, 0.8, 1, 0.55)
+polygon = PackedVector2Array(-70, -40, 70, -40, 70, 40, -70, 40)
+
+[node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZoneSmall"]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneSmall/ElevationBlocker"]
+shape = SubResource("RectangleShape2D_elev_zone_small")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneSmall"]
+shape = SubResource("RectangleShape2D_elev_zone_small")
+
+[node name="ElevationZoneTall" type="Area2D" parent="."]
+position = Vector2(260, 220)
+script = ExtResource("2_t3m6r")
+elevation_level = 1
+groups = ["nav_obstacle"]
+
+[node name="ZoneShadow" type="Polygon2D" parent="ElevationZoneTall"]
+color = Color(0.0, 0.0, 0.0, 0.18)
+polygon = PackedVector2Array(-44, -80, 76, -80, 76, 100, -44, 100)
+
+[node name="ZoneSide" type="Polygon2D" parent="ElevationZoneTall"]
+color = Color(0.1, 0.45, 0.6, 0.6)
+polygon = PackedVector2Array(-60, 90, 60, 90, 76, 100, -44, 100)
+
+[node name="ZoneVisual" type="Polygon2D" parent="ElevationZoneTall"]
+color = Color(0.2, 0.8, 1, 0.55)
+polygon = PackedVector2Array(-60, -90, 60, -90, 60, 90, -60, 90)
+
+[node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZoneTall"]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneTall/ElevationBlocker"]
+shape = SubResource("RectangleShape2D_elev_zone_tall")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneTall"]
+shape = SubResource("RectangleShape2D_elev_zone_tall")

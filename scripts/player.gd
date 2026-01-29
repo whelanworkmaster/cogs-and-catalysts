@@ -3,7 +3,6 @@ extends CharacterBody2D
 class_name Player
 
 const DamagePopup = preload("res://scripts/ui/damage_popup.gd")
-const CombatOverlay = preload("res://scripts/ui/combat_overlay.gd")
 
 const ElevationArea = preload("res://scripts/world/elevation_area.gd")
 
@@ -67,7 +66,6 @@ func _ready():
 		CombatManager.combat_ended.connect(_on_combat_ended)
 	# Create a basic visual representation
 	create_player_sprite()
-	_create_combat_overlay()
 
 func _physics_process(delta):
 	handle_stance_input()
@@ -344,14 +342,42 @@ func is_disengage_active() -> bool:
 	return disengage_active
 
 func create_player_sprite():
-	"""Creates a basic colored rectangle as the player sprite."""
-	var sprite = $Sprite2D
-	# Create a simple colored rectangle using a ColorRect
-	var color_rect = ColorRect.new()
-	color_rect.size = Vector2(32, 32)
-	color_rect.color = Color.BLUE
-	color_rect.position = Vector2(-16, -16)  # Center the rectangle
-	sprite.add_child(color_rect)
+	"""Creates a faux-3D block so the player has depth."""
+	var sprite := $Sprite2D
+	_build_depth_block(sprite, Vector2(32, 32), Color(0.2, 0.45, 1.0), 6.0)
+
+func _build_depth_block(sprite: Node, size: Vector2, base_color: Color, depth: float) -> void:
+	if not sprite:
+		return
+	for child in sprite.get_children():
+		child.queue_free()
+	var shadow := ColorRect.new()
+	shadow.size = size
+	shadow.color = Color(0.0, 0.0, 0.0, 0.2)
+	shadow.position = Vector2(-size.x * 0.5 + depth * 0.4, -size.y * 0.5 + depth * 0.6)
+	shadow.z_index = -3
+	sprite.add_child(shadow)
+
+	var side := ColorRect.new()
+	side.size = Vector2(size.x, depth)
+	side.color = base_color.darkened(0.35)
+	side.position = Vector2(-size.x * 0.5, size.y * 0.5)
+	side.z_index = -1
+	sprite.add_child(side)
+
+	var top := ColorRect.new()
+	top.size = size
+	top.color = base_color
+	top.position = Vector2(-size.x * 0.5, -size.y * 0.5)
+	top.z_index = 0
+	sprite.add_child(top)
+
+	var highlight := ColorRect.new()
+	highlight.size = Vector2(size.x, 3.0)
+	highlight.color = Color(1.0, 1.0, 1.0, 0.15)
+	highlight.position = top.position
+	highlight.z_index = 1
+	sprite.add_child(highlight)
 
 func _on_elevation_area_entered(area: Area2D):
 	if area is ElevationArea:
@@ -445,11 +471,3 @@ func _spawn_damage_popup(amount: int, color: Color) -> void:
 	popup.color = color
 	popup.global_position = global_position + Vector2(0, -20)
 	scene.add_child(popup)
-
-func _create_combat_overlay() -> void:
-	if has_node("CombatOverlay"):
-		return
-	var overlay := Node2D.new()
-	overlay.name = "CombatOverlay"
-	overlay.set_script(CombatOverlay)
-	add_child(overlay)

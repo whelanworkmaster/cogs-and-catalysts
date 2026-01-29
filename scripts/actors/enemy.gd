@@ -8,35 +8,79 @@ const EnemyThreatVisual = preload("res://scripts/ui/enemy_threat_visual.gd")
 const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
 
 @export var max_hp: int = 8
-@export var max_ap: int = 6
+@export var max_ap: int = 10
 @export var move_step: float = 32.0
 @export var attack_contact_distance: float = 40.0
 @export var attack_damage: int = 2
-var current_ap: int = 6
+var current_ap: int = 0
 var current_hp: int = 0
 @onready var ai = $AI
 @onready var attack_area: Area2D = $AttackArea
+@onready var nav_agent: NavigationAgent2D = $NavigationAgent2D
 var _hit_tween: Tween
 
 func _ready() -> void:
 	current_hp = max_hp
+	current_ap = max_ap
 	add_to_group("enemy")
 	_configure_attack_area()
 	_create_enemy_sprite()
 	_create_threat_visual()
+	if CombatManager:
+		CombatManager.turn_started.connect(_on_turn_started)
 
 func _create_enemy_sprite() -> void:
 	var sprite := $Sprite2D
-	var color_rect := ColorRect.new()
-	color_rect.size = Vector2(28, 28)
-	color_rect.color = Color(0.9, 0.2, 0.2)
-	color_rect.position = Vector2(-14, -14)
-	sprite.add_child(color_rect)
+	_build_depth_block(sprite, Vector2(28, 28), Color(0.9, 0.2, 0.2), 6.0)
+
+func _build_depth_block(sprite: Node, size: Vector2, base_color: Color, depth: float) -> void:
+	if not sprite:
+		return
+	for child in sprite.get_children():
+		child.queue_free()
+	var shadow := ColorRect.new()
+	shadow.size = size
+	shadow.color = Color(0.0, 0.0, 0.0, 0.22)
+	shadow.position = Vector2(-size.x * 0.5 + depth * 0.4, -size.y * 0.5 + depth * 0.6)
+	shadow.z_index = -3
+	sprite.add_child(shadow)
+
+	var side := ColorRect.new()
+	side.size = Vector2(size.x, depth)
+	side.color = base_color.darkened(0.4)
+	side.position = Vector2(-size.x * 0.5, size.y * 0.5)
+	side.z_index = -1
+	sprite.add_child(side)
+
+	var top := ColorRect.new()
+	top.size = size
+	top.color = base_color
+	top.position = Vector2(-size.x * 0.5, -size.y * 0.5)
+	top.z_index = 0
+	sprite.add_child(top)
+
+	var highlight := ColorRect.new()
+	highlight.size = Vector2(size.x, 3.0)
+	highlight.color = Color(1.0, 1.0, 1.0, 0.12)
+	highlight.position = top.position
+	highlight.z_index = 1
+	sprite.add_child(highlight)
 
 func move_towards(target_position: Vector2, distance: float = 0.0) -> void:
 	var step := distance if distance > 0.0 else move_step
-	var direction := (target_position - global_position).normalized()
-	global_position += direction * step
+	var world := get_tree().current_scene
+	if world and world.has_method("get_astar_path"):
+		var path: PackedVector2Array = world.get_astar_path(global_position, target_position)
+		if path.size() > 1:
+			var next_pos := path[1]
+			var to_next := next_pos - global_position
+			if to_next == Vector2.ZERO:
+				return
+			var motion: Vector2 = to_next.normalized() * min(step, to_next.length())
+			move_and_collide(motion)
+			return
+		print("Enemy path empty or too short. pos=", global_position, " target=", target_position, " path_size=", path.size())
+		return
 
 func attack(target: Node) -> void:
 	if not target:
@@ -53,6 +97,15 @@ func get_current_ap() -> int:
 
 func get_max_ap() -> int:
 	return max_ap
+
+func spend_ap(amount: int) -> bool:
+	if current_ap >= amount:
+		current_ap -= amount
+		return true
+	return false
+
+func reset_ap() -> void:
+	current_ap = max_ap
 
 func get_current_hp() -> int:
 	return current_hp
@@ -151,3 +204,7 @@ func _create_threat_visual() -> void:
 	ring.name = "ThreatVisual"
 	ring.set_script(EnemyThreatVisual)
 	add_child(ring)
+
+func _on_turn_started(actor: Node) -> void:
+	if actor == self:
+		reset_ap()
