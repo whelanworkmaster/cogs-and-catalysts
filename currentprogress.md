@@ -29,14 +29,15 @@
 - Project structure refactored (`scenes/`, `scripts/`, `scripts/world`, `scripts/systems`, `scripts/ai`, `scripts/ui`, `scripts/actors`).
 - GameMode singleton with exploration vs. turn-based states.
 - CombatManager singleton with turn order and start/end combat.
-- Engagement trigger that starts combat and includes enemy actors.
+- Combat now auto-starts on scene load (no engagement trigger).
 - Player movement:
   - Exploration: free movement, no AP cost.
   - Combat: AP-spending step movement with cooldown.
   - AP resets at the start of the player's turn.
 - Enemy actor:
-  - Basic AI state scaffold (idle -> seek).
-  - Simple seek step toward player, then end turn.
+  - AI state scaffold (idle -> seek).
+  - AP-based seek with half-AP budget and multiple steps per turn.
+  - A* grid pathfinding around blockers + collision-aware movement.
 - Deterministic combat MVP:
     - Player attack (overlap range) with AP cost and damage.
   - Enemy HP/damage/death with mutagenic cell drop + simple death tween.
@@ -46,10 +47,10 @@
   - Player HP, damage feedback, and mutagenic cell pickup with UI readouts.
   - Stances (Neutral/Guard/Aggress/Evade), Disengage toggle, and reaction attacks on leaving threat range.
   - Hit feedback (flash + squash/stretch) and floating damage numbers.
-- Visualized combat UI (in-world + HUD):
-  - Stance ring, disengage ring, AP pips, and clocks above player.
-  - Enemy threat zone ring.
-  - HUD now shows player HP, last hit, stance/disengage, cells, and controls.
+- Visuals:
+  - Faux-3D depth blocks for player, enemy, and building zones.
+  - Player-attached combat overlay removed; enemy threat ring remains.
+  - Added extra building zones to create navigation obstacles.
 - FitD clocks (UI + logic):
   - Detection/Toxicity clocks displayed in HUD.
   - Detection ticks on combat start + player moves + player attacks.
@@ -58,7 +59,7 @@
 ## Current Files / Systems
 - `scripts/systems/game_mode_controller.gd`
 - `scripts/systems/combat_manager.gd`
-- `scripts/world/engagement_trigger.gd`
+- `scripts/world/main.gd`
 - `scripts/actors/enemy.gd`
 - `scripts/ai/ai_state.gd`
 - `scripts/ai/enemy_ai.gd`
@@ -70,7 +71,7 @@
 - `scripts/ui/enemy_threat_visual.gd`
 - `scripts/systems/clock.gd`
 - `scripts/world/mutagenic_cell.gd`
-- `scenes/main.tscn`, `scenes/player.tscn`, `scenes/enemy.tscn`, `scenes/engagement_trigger.tscn`, `scenes/ui/combat_hud.tscn`
+- `scenes/main.tscn`, `scenes/player.tscn`, `scenes/enemy.tscn`, `scenes/ui/combat_hud.tscn`
 
 ## Next Steps (Suggested Order)
 1) Level challenge and encounter design (MVP)
@@ -101,5 +102,4 @@
 ## Notes
 - Combat movement currently uses a cooldown to prevent AP burn when holding a key.
 - The player is in the `player` group for AI targeting.
-- Changes since last push include combat stances, reaction attacks, overlap targeting, pickups, and in-world combat visuals.
-
+- A* grid pathfinding includes debug logs for grid bounds, obstacles, and path requests.

@@ -24,28 +24,27 @@ CombatManager="*res://scripts/systems/combat_manager.gd"
 
 attack={
 "deadzone": 0.5,
-"events": [ {
-"type": "InputEventKey",
+"events": [{
 "device": -1,
 "keycode": 70,
-"physical_keycode": 70,
-"unicode": 70,
 "location": 0,
-"modifiers": 0
-} ]
+"modifiers": 0,
+"physical_keycode": 70,
+"type": "InputEventKey",
+"unicode": 70
+}]
 }
-
 end_turn={
 "deadzone": 0.5,
-"events": [ {
-"type": "InputEventKey",
+"events": [{
 "device": -1,
 "keycode": 32,
-"physical_keycode": 32,
-"unicode": 32,
 "location": 0,
-"modifiers": 0
-} ]
+"modifiers": 0,
+"physical_keycode": 32,
+"type": "InputEventKey",
+"unicode": 32
+}]
 }
 
 [physics]
