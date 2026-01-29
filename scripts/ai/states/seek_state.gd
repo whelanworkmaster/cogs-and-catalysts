@@ -20,14 +20,13 @@ func tick(owner: Node, _delta: float) -> void:
 	if not player:
 		_end_turn(owner)
 		return
-	var distance: float = owner.global_position.distance_to(player.global_position)
-	var attack_distance: float = 0.0
-	if owner.has_method("get_attack_contact_distance"):
-		attack_distance = owner.get_attack_contact_distance()
-	if attack_distance > 0.0 and distance <= attack_distance:
+	var targets: Array = []
+	if owner.has_method("get_attack_targets"):
+		targets = owner.get_attack_targets()
+	if not targets.is_empty():
 		if owner.has_method("attack"):
-			owner.attack(player)
-			print("Enemy attack for contact distance ", attack_distance)
+			owner.attack(targets[0])
+			print("Enemy attack on overlap target.")
 		_moved = true
 		_end_turn(owner)
 		return

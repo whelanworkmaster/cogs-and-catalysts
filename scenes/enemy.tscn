@@ -1,10 +1,13 @@
-[gd_scene load_steps=3 format=3 uid="uid://c6d45ey1whev"]
+[gd_scene load_steps=4 format=3 uid="uid://c6d45ey1whev"]
 
 [ext_resource type="Script" path="res://scripts/actors/enemy.gd" id="1_1q8s0"]
 [ext_resource type="Script" path="res://scripts/ai/enemy_ai.gd" id="2_0g3w7"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_9g8r1"]
 size = Vector2(28, 28)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_attack"]
+radius = 40.0
 
 [node name="Enemy" type="CharacterBody2D"]
 script = ExtResource("1_1q8s0")
@@ -16,3 +19,9 @@ shape = SubResource("RectangleShape2D_9g8r1")
 
 [node name="AI" type="Node" parent="."]
 script = ExtResource("2_0g3w7")
+
+[node name="AttackArea" type="Area2D" parent="."]
+monitoring = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
+shape = SubResource("CircleShape2D_attack")

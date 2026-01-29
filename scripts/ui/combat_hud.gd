@@ -3,12 +3,16 @@ extends CanvasLayer
 @onready var mode_label: Label = $MarginContainer/VBoxContainer/ModeLabel
 @onready var actor_label: Label = $MarginContainer/VBoxContainer/ActorLabel
 @onready var ap_label: Label = $MarginContainer/VBoxContainer/APLabel
+@onready var player_hp_label: Label = $MarginContainer/VBoxContainer/PlayerHPLabel
+@onready var damage_taken_label: Label = $MarginContainer/VBoxContainer/DamageTakenLabel
+@onready var stance_label: Label = $MarginContainer/VBoxContainer/StanceLabel
 @onready var control_label: Label = $MarginContainer/VBoxContainer/ControlLabel
 @onready var state_label: Label = $MarginContainer/VBoxContainer/StateLabel
 @onready var enemy_hp_label: Label = $MarginContainer/VBoxContainer/EnemyHPLabel
 @onready var damage_label: Label = $MarginContainer/VBoxContainer/DamageLabel
 @onready var range_label: Label = $MarginContainer/VBoxContainer/RangeLabel
 @onready var attack_label: Label = $MarginContainer/VBoxContainer/AttackLabel
+@onready var cells_label: Label = $MarginContainer/VBoxContainer/CellsLabel
 @onready var detection_clock_label: Label = $MarginContainer/VBoxContainer/DetectionClockLabel
 @onready var toxicity_clock_label: Label = $MarginContainer/VBoxContainer/ToxicityClockLabel
 
@@ -30,6 +34,7 @@ func _process(_delta: float) -> void:
 	_refresh_ap()
 	_refresh_state()
 	_refresh_enemy_status()
+	_refresh_player_status()
 	_refresh_clocks()
 
 func _on_mode_changed(_new_mode: int, _previous_mode: int) -> void:
@@ -69,11 +74,35 @@ func _refresh_ap() -> void:
 	else:
 		ap_label.text = "AP: -"
 
+func _refresh_player_status() -> void:
+	var player: Node = get_tree().get_first_node_in_group("player")
+	if player and player.has_method("get_current_hp") and player.has_method("get_max_hp"):
+		player_hp_label.text = "Player HP: %s/%s" % [player.get_current_hp(), player.get_max_hp()]
+	else:
+		player_hp_label.text = "Player HP: -"
+	if player and player.has_method("get_last_damage_taken") and player.has_method("get_last_damage_source"):
+		var amount: int = int(player.get_last_damage_taken())
+		var source: String = str(player.get_last_damage_source())
+		damage_taken_label.text = "Last Hit: %s from %s" % [amount, source]
+	else:
+		damage_taken_label.text = "Last Hit: -"
+	if player and player.has_method("get_stance_name") and player.has_method("is_disengage_active"):
+		var disengage_on: bool = bool(player.is_disengage_active())
+		var status: String = "ON" if disengage_on else "OFF"
+		stance_label.text = "Stance: %s | Disengage: %s" % [player.get_stance_name(), status]
+	else:
+		stance_label.text = "Stance: -"
+	if player and player.has_method("get_mutagenic_cells"):
+		cells_label.text = "Cells: %s" % player.get_mutagenic_cells()
+	else:
+		cells_label.text = "Cells: -"
+
 func _refresh_controls() -> void:
 	var move_keys := "Move=Arrows/WASD"
 	var attack_keys := "Attack=F/LMB"
 	var end_turn_keys := "End Turn=Space"
-	control_label.text = "Controls: %s  %s  %s" % [move_keys, attack_keys, end_turn_keys]
+	var stance_keys := "Stance=Q  Disengage=E"
+	control_label.text = "Controls: %s  %s  %s  %s" % [move_keys, attack_keys, end_turn_keys, stance_keys]
 
 func _refresh_state() -> void:
 	var actor: Node = CombatManager.get_current_actor() if CombatManager else null

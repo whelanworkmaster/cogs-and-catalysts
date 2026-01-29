@@ -2,6 +2,8 @@ extends CharacterBody2D
 
 class_name Enemy
 
+const DamagePopup = preload("res://scripts/ui/damage_popup.gd")
+
 const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
 
 @export var max_hp: int = 8
@@ -12,10 +14,13 @@ const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
 var current_ap: int = 6
 var current_hp: int = 0
 @onready var ai = $AI
+@onready var attack_area: Area2D = $AttackArea
+var _hit_tween: Tween
 
 func _ready() -> void:
 	current_hp = max_hp
 	add_to_group("enemy")
+	_configure_attack_area()
 	_create_enemy_sprite()
 
 func _create_enemy_sprite() -> void:
@@ -56,6 +61,16 @@ func get_max_hp() -> int:
 func get_attack_contact_distance() -> float:
 	return attack_contact_distance
 
+func get_attack_targets() -> Array:
+	if not attack_area:
+		return []
+	var bodies := attack_area.get_overlapping_bodies()
+	var targets: Array = []
+	for body in bodies:
+		if body != null and body.is_in_group("player"):
+			targets.append(body)
+	return targets
+
 func get_ai() -> Node:
 	return ai
 
@@ -64,6 +79,8 @@ func take_damage(amount: int, source: Node = null) -> void:
 		return
 	current_hp = max(current_hp - amount, 0)
 	print("%s took %s damage. HP: %s/%s" % [name, amount, current_hp, max_hp])
+	_spawn_damage_popup(amount, Color(1.0, 0.35, 0.35))
+	_play_hit_feedback()
 	if current_hp <= 0:
 		_die()
 
@@ -90,3 +107,37 @@ func _play_death_effect() -> void:
 	var tween := create_tween()
 	tween.tween_property(sprite, "scale", Vector2(0.1, 0.1), 0.2)
 	tween.parallel().tween_property(sprite, "modulate:a", 0.0, 0.2)
+
+func _configure_attack_area() -> void:
+	if not attack_area:
+		return
+	attack_area.monitoring = true
+	var shape_node := attack_area.get_node_or_null("CollisionShape2D")
+	if shape_node and shape_node.shape and shape_node.shape is CircleShape2D:
+		shape_node.shape.radius = attack_contact_distance
+
+func _play_hit_feedback() -> void:
+	if not has_node("Sprite2D"):
+		return
+	var sprite := $Sprite2D
+	if _hit_tween and _hit_tween.is_running():
+		_hit_tween.kill()
+	_hit_tween = create_tween()
+	_hit_tween.tween_property(sprite, "scale", Vector2(1.08, 0.92), 0.06)
+	_hit_tween.tween_property(sprite, "scale", Vector2.ONE, 0.08)
+	if sprite.get_child_count() > 0:
+		var rect := sprite.get_child(0)
+		if rect is ColorRect:
+			var base_color: Color = rect.color
+			_hit_tween.parallel().tween_property(rect, "color", Color(1.0, 1.0, 1.0), 0.05)
+			_hit_tween.tween_property(rect, "color", base_color, 0.08)
+
+func _spawn_damage_popup(amount: int, color: Color) -> void:
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	var popup := DamagePopup.new()
+	popup.amount = amount
+	popup.color = color
+	popup.global_position = global_position + Vector2(0, -20)
+	scene.add_child(popup)
