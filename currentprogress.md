@@ -37,7 +37,23 @@
 - Enemy actor:
   - Basic AI state scaffold (idle -> seek).
   - Simple seek step toward player, then end turn.
-- Debug Combat HUD showing mode, current turn actor, and AP.
+- Deterministic combat MVP:
+    - Player attack (overlap range) with AP cost and damage.
+  - Enemy HP/damage/death with mutagenic cell drop + simple death tween.
+    - Enemy attacks on its turn if in overlap range.
+  - Combat auto-ends when only the player remains.
+- Combat polish:
+  - Player HP, damage feedback, and mutagenic cell pickup with UI readouts.
+  - Stances (Neutral/Guard/Aggress/Evade), Disengage toggle, and reaction attacks on leaving threat range.
+  - Hit feedback (flash + squash/stretch) and floating damage numbers.
+- Visualized combat UI (in-world + HUD):
+  - Stance ring, disengage ring, AP pips, and clocks above player.
+  - Enemy threat zone ring.
+  - HUD now shows player HP, last hit, stance/disengage, cells, and controls.
+- FitD clocks (UI + logic):
+  - Detection/Toxicity clocks displayed in HUD.
+  - Detection ticks on combat start + player moves + player attacks.
+  - Toxicity ticks when player takes damage and prints alarm.
 
 ## Current Files / Systems
 - `scripts/systems/game_mode_controller.gd`
@@ -49,17 +65,22 @@
 - `scripts/ai/states/idle_state.gd`
 - `scripts/ai/states/seek_state.gd`
 - `scripts/ui/combat_hud.gd`
+- `scripts/ui/damage_popup.gd`
+- `scripts/ui/combat_overlay.gd`
+- `scripts/ui/enemy_threat_visual.gd`
+- `scripts/systems/clock.gd`
+- `scripts/world/mutagenic_cell.gd`
 - `scenes/main.tscn`, `scenes/player.tscn`, `scenes/enemy.tscn`, `scenes/engagement_trigger.tscn`, `scenes/ui/combat_hud.tscn`
 
 ## Next Steps (Suggested Order)
-1) LUMEN combat basics
-   - Implement deterministic damage (attack always hits if in range + AP spent).
-   - Centralize AP costs for move/attack/ability.
-   - Add Mutagenic Cells drop on enemy death.
+1) Level challenge and encounter design (MVP)
+   - Add a simple hazard tile (steam vent) that ticks Toxicity or deals damage.
+   - Introduce a second enemy type or a ranged variant to force positioning.
+   - Place cover or blockers that shape movement and create threat zones.
 
-2) FitD clocks (UI + logic)
-   - Clock resource + ProgressBar UI for 4/6/8 segments.
-   - Detection + Toxicity clocks with simple tick rules.
+2) FitD clocks (polish)
+   - Replace labels with segmented UI bars (4/6/8).
+   - Define clear "full clock" consequences (alarm/reinforcements).
 
 3) Internal Rig loadout
    - Organ slot loadout selection at heist start.
@@ -80,4 +101,5 @@
 ## Notes
 - Combat movement currently uses a cooldown to prevent AP burn when holding a key.
 - The player is in the `player` group for AI targeting.
-- All changes are committed and pushed to origin/main.
+- Changes since last push include combat stances, reaction attacks, overlap targeting, pickups, and in-world combat visuals.
+

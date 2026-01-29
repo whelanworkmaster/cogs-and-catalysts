@@ -3,6 +3,7 @@ extends CharacterBody2D
 class_name Enemy
 
 const DamagePopup = preload("res://scripts/ui/damage_popup.gd")
+const EnemyThreatVisual = preload("res://scripts/ui/enemy_threat_visual.gd")
 
 const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
 
@@ -22,6 +23,7 @@ func _ready() -> void:
 	add_to_group("enemy")
 	_configure_attack_area()
 	_create_enemy_sprite()
+	_create_threat_visual()
 
 func _create_enemy_sprite() -> void:
 	var sprite := $Sprite2D
@@ -141,3 +143,11 @@ func _spawn_damage_popup(amount: int, color: Color) -> void:
 	popup.color = color
 	popup.global_position = global_position + Vector2(0, -20)
 	scene.add_child(popup)
+
+func _create_threat_visual() -> void:
+	if has_node("ThreatVisual"):
+		return
+	var ring := Node2D.new()
+	ring.name = "ThreatVisual"
+	ring.set_script(EnemyThreatVisual)
+	add_child(ring)

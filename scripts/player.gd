@@ -3,6 +3,7 @@ extends CharacterBody2D
 class_name Player
 
 const DamagePopup = preload("res://scripts/ui/damage_popup.gd")
+const CombatOverlay = preload("res://scripts/ui/combat_overlay.gd")
 
 const ElevationArea = preload("res://scripts/world/elevation_area.gd")
 
@@ -66,6 +67,7 @@ func _ready():
 		CombatManager.combat_ended.connect(_on_combat_ended)
 	# Create a basic visual representation
 	create_player_sprite()
+	_create_combat_overlay()
 
 func _physics_process(delta):
 	handle_stance_input()
@@ -443,3 +445,11 @@ func _spawn_damage_popup(amount: int, color: Color) -> void:
 	popup.color = color
 	popup.global_position = global_position + Vector2(0, -20)
 	scene.add_child(popup)
+
+func _create_combat_overlay() -> void:
+	if has_node("CombatOverlay"):
+		return
+	var overlay := Node2D.new()
+	overlay.name = "CombatOverlay"
+	overlay.set_script(CombatOverlay)
+	add_child(overlay)
