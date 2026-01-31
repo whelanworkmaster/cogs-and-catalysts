@@ -1,13 +1,13 @@
-[gd_scene load_steps=12 format=3 uid="uid://b8x7y302a1c4e"]
+[gd_scene format=3 uid="uid://b8x7y302a1c4e"]
 
-[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_km6kn"]
-[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="2_1q8s0"]
-[ext_resource type="Script" path="res://scripts/world/elevation_area.gd" id="2_t3m6r"]
-[ext_resource type="PackedScene" path="res://scenes/ui/combat_hud.tscn" id="3_2h1x5"]
-[ext_resource type="Script" path="res://scripts/world/main.gd" id="4_main"]
-[ext_resource type="Script" path="res://scripts/world/steam_vent.gd" id="5_steam_vent"]
+[ext_resource type="PackedScene" uid="uid://d1k6rj0x6c2mj" path="res://scenes/player.tscn" id="1_km6kn"]
+[ext_resource type="PackedScene" uid="uid://c6d45ey1whev" path="res://scenes/enemy.tscn" id="2_1q8s0"]
+[ext_resource type="Script" uid="uid://t8dj2wp7x0vv" path="res://scripts/world/elevation_area.gd" id="2_t3m6r"]
+[ext_resource type="PackedScene" uid="uid://bcb5dy2tgvfdj" path="res://scenes/ui/combat_hud.tscn" id="3_2h1x5"]
+[ext_resource type="Script" uid="uid://dlx3vgwvijm6i" path="res://scripts/world/main.gd" id="4_main"]
+[ext_resource type="Script" uid="uid://dnmcwipth31w0" path="res://scripts/world/steam_vent.gd" id="5_steam_vent"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over.tscn" id="6_game_over"]
-[ext_resource type="Script" path="res://scripts/world/grid_overlay.gd" id="7_grid_overlay"]
+[ext_resource type="Script" uid="uid://dr3u4od5tpogn" path="res://scripts/world/grid_overlay.gd" id="7_grid_overlay"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone"]
 size = Vector2(200, 120)
@@ -21,124 +21,116 @@ size = Vector2(120, 180)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_steam_vent"]
 size = Vector2(60, 40)
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=538638056]
 script = ExtResource("4_main")
 debug_procgen = true
 
-[node name="NavigationRegion2D" type="NavigationRegion2D" parent="."]
+[node name="NavigationRegion2D" type="NavigationRegion2D" parent="." unique_id=1316010243]
 
-[node name="GridOverlay" type="Node2D" parent="."]
+[node name="GridOverlay" type="Node2D" parent="." unique_id=1353513828]
 script = ExtResource("7_grid_overlay")
 
-[node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(0, 0)
+[node name="Camera2D" type="Camera2D" parent="." unique_id=788147467]
 
-[node name="Player" parent="." instance=ExtResource("1_km6kn")]
-position = Vector2(0, 0)
+[node name="Player" parent="." unique_id=1592712302 instance=ExtResource("1_km6kn")]
 
-[node name="Enemy" parent="." instance=ExtResource("2_1q8s0")]
+[node name="Enemy" parent="." unique_id=750309638 instance=ExtResource("2_1q8s0")]
 position = Vector2(0, 280)
 
-[node name="CombatHUD" parent="." instance=ExtResource("3_2h1x5")]
+[node name="CombatHUD" parent="." unique_id=1484195412 instance=ExtResource("3_2h1x5")]
 
-[node name="GameOver" parent="." instance=ExtResource("6_game_over")]
+[node name="GameOver" parent="." unique_id=103075692 instance=ExtResource("6_game_over")]
 
-[node name="ElevationZone" type="Area2D" parent="."]
+[node name="ElevationZone" type="Area2D" parent="." unique_id=1844392058]
 position = Vector2(260, 0)
 script = ExtResource("2_t3m6r")
 elevation_level = 1
-groups = ["nav_obstacle"]
 
-[node name="ZoneShadow" type="Polygon2D" parent="ElevationZone"]
-color = Color(0.0, 0.0, 0.0, 0.18)
+[node name="ZoneShadow" type="Polygon2D" parent="ElevationZone" unique_id=1945086979]
+color = Color(0, 0, 0, 0.18)
 polygon = PackedVector2Array(-84, -50, 116, -50, 116, 70, -84, 70)
 
-[node name="ZoneSide" type="Polygon2D" parent="ElevationZone"]
+[node name="ZoneSide" type="Polygon2D" parent="ElevationZone" unique_id=660877592]
 color = Color(0.1, 0.45, 0.6, 0.6)
 polygon = PackedVector2Array(-100, 60, 100, 60, 116, 70, -84, 70)
 
-[node name="ZoneVisual" type="Polygon2D" parent="ElevationZone"]
+[node name="ZoneVisual" type="Polygon2D" parent="ElevationZone" unique_id=508402867]
 color = Color(0.2, 0.8, 1, 0.55)
 polygon = PackedVector2Array(-100, -60, 100, -60, 100, 60, -100, 60)
 
-[node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZone"]
+[node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZone" unique_id=642331168]
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZone/ElevationBlocker"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZone/ElevationBlocker" unique_id=1519980796]
 shape = SubResource("RectangleShape2D_elev_zone")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZone"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZone" unique_id=695278615]
 shape = SubResource("RectangleShape2D_elev_zone")
 
-[node name="ElevationZoneSmall" type="Area2D" parent="."]
+[node name="ElevationZoneSmall" type="Area2D" parent="." unique_id=753256475]
 position = Vector2(-260, -40)
 script = ExtResource("2_t3m6r")
 elevation_level = 1
-groups = ["nav_obstacle"]
 
-[node name="ZoneShadow" type="Polygon2D" parent="ElevationZoneSmall"]
-color = Color(0.0, 0.0, 0.0, 0.18)
+[node name="ZoneShadow" type="Polygon2D" parent="ElevationZoneSmall" unique_id=863430525]
+color = Color(0, 0, 0, 0.18)
 polygon = PackedVector2Array(-58, -32, 82, -32, 82, 48, -58, 48)
 
-[node name="ZoneSide" type="Polygon2D" parent="ElevationZoneSmall"]
+[node name="ZoneSide" type="Polygon2D" parent="ElevationZoneSmall" unique_id=1280128960]
 color = Color(0.1, 0.45, 0.6, 0.6)
 polygon = PackedVector2Array(-70, 40, 70, 40, 82, 48, -58, 48)
 
-[node name="ZoneVisual" type="Polygon2D" parent="ElevationZoneSmall"]
+[node name="ZoneVisual" type="Polygon2D" parent="ElevationZoneSmall" unique_id=1594324014]
 color = Color(0.2, 0.8, 1, 0.55)
 polygon = PackedVector2Array(-70, -40, 70, -40, 70, 40, -70, 40)
 
-[node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZoneSmall"]
+[node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZoneSmall" unique_id=2102381746]
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneSmall/ElevationBlocker"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneSmall/ElevationBlocker" unique_id=1122563183]
 shape = SubResource("RectangleShape2D_elev_zone_small")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneSmall"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneSmall" unique_id=947051996]
 shape = SubResource("RectangleShape2D_elev_zone_small")
 
-[node name="ElevationZoneTall" type="Area2D" parent="."]
+[node name="ElevationZoneTall" type="Area2D" parent="." unique_id=1879803293]
 position = Vector2(260, 220)
 script = ExtResource("2_t3m6r")
 elevation_level = 1
-groups = ["nav_obstacle"]
 
-[node name="ZoneShadow" type="Polygon2D" parent="ElevationZoneTall"]
-color = Color(0.0, 0.0, 0.0, 0.18)
+[node name="ZoneShadow" type="Polygon2D" parent="ElevationZoneTall" unique_id=974413556]
+color = Color(0, 0, 0, 0.18)
 polygon = PackedVector2Array(-44, -80, 76, -80, 76, 100, -44, 100)
 
-[node name="ZoneSide" type="Polygon2D" parent="ElevationZoneTall"]
+[node name="ZoneSide" type="Polygon2D" parent="ElevationZoneTall" unique_id=1573991125]
 color = Color(0.1, 0.45, 0.6, 0.6)
 polygon = PackedVector2Array(-60, 90, 60, 90, 76, 100, -44, 100)
 
-[node name="ZoneVisual" type="Polygon2D" parent="ElevationZoneTall"]
+[node name="ZoneVisual" type="Polygon2D" parent="ElevationZoneTall" unique_id=380965346]
 color = Color(0.2, 0.8, 1, 0.55)
 polygon = PackedVector2Array(-60, -90, 60, -90, 60, 90, -60, 90)
 
-[node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZoneTall"]
+[node name="ElevationBlocker" type="StaticBody2D" parent="ElevationZoneTall" unique_id=1650075018]
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneTall/ElevationBlocker"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneTall/ElevationBlocker" unique_id=587390937]
 shape = SubResource("RectangleShape2D_elev_zone_tall")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneTall"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationZoneTall" unique_id=1431514797]
 shape = SubResource("RectangleShape2D_elev_zone_tall")
 
-[node name="SteamVent" type="Area2D" parent="."]
+[node name="SteamVent" type="Area2D" parent="." unique_id=356172186]
 position = Vector2(-140, 180)
 script = ExtResource("5_steam_vent")
-damage_amount = 0
-toxicity_ticks = 1
-groups = ["steam_vent"]
 
-[node name="VentRim" type="Polygon2D" parent="SteamVent"]
+[node name="VentRim" type="Polygon2D" parent="SteamVent" unique_id=1595324536]
 color = Color(0.55, 0.3, 0.1, 0.9)
 polygon = PackedVector2Array(-32, -22, 32, -22, 32, 22, -32, 22)
 
-[node name="VentGlow" type="Polygon2D" parent="SteamVent"]
+[node name="VentGlow" type="Polygon2D" parent="SteamVent" unique_id=888784781]
 color = Color(1, 0.6, 0.2, 0.45)
 polygon = PackedVector2Array(-26, -16, 26, -16, 26, 16, -26, 16)
 
-[node name="VentSteam" type="Polygon2D" parent="SteamVent"]
+[node name="VentSteam" type="Polygon2D" parent="SteamVent" unique_id=1622807526]
 color = Color(0.9, 0.95, 1, 0.35)
 polygon = PackedVector2Array(-18, -26, 18, -26, 24, -10, -24, -10)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="SteamVent"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="SteamVent" unique_id=2130824552]
 shape = SubResource("RectangleShape2D_steam_vent")
