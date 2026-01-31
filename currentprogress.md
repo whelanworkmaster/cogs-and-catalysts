@@ -52,6 +52,7 @@
   - Faux-3D depth blocks for player, enemy, and building zones.
   - Player-attached combat overlay removed; enemy threat ring remains.
   - Added extra building zones to create navigation obstacles.
+  - Grid overlay drawn on the navigation cell layout (skips building footprints).
 - Hazards:
   - Steam vent hazard that ticks Toxicity on contact.
 - FitD clocks (UI + logic):
@@ -61,6 +62,7 @@
 - Player death:
   - Death animation (color shift + shrink/fade) and Game Over overlay with retry.
 - Procgen (first pass):
+  - Spawn positions are snapped to grid cells; player/enemy movement snaps to grid in combat.
   - Randomized building layout (4–6 by default).
   - Randomized enemy count/placement and player start with spacing checks.
   - Randomized steam vent count (2–3) and placement with spacing vs. buildings/enemies/player.
@@ -82,6 +84,7 @@
 - `scripts/systems/clock.gd`
 - `scripts/world/mutagenic_cell.gd`
 - `scripts/world/steam_vent.gd`
+- `scripts/world/grid_overlay.gd`
 - `scenes/main.tscn`, `scenes/player.tscn`, `scenes/enemy.tscn`, `scenes/ui/combat_hud.tscn`, `scenes/ui/game_over.tscn`
 
 ## Next Steps (Suggested Order)
