@@ -49,6 +49,7 @@
   - Stances (Neutral/Guard/Aggress/Evade), Disengage toggle, and reaction attacks on leaving threat range.
   - Hit feedback (flash + squash/stretch) and floating damage numbers.
 - Visuals:
+  - Partial 2.5D elevation cues (lifted platform faces, underhangs, right face, grounded actor shadows).
   - Faux-3D depth blocks for player, enemy, and building zones.
   - Player-attached combat overlay removed; enemy threat ring remains.
   - Added extra building zones to create navigation obstacles.
