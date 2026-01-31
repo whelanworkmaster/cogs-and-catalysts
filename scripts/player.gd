@@ -9,6 +9,7 @@ const ElevationArea = preload("res://scripts/world/elevation_area.gd")
 # Movement variables
 @export var speed: float = 750.0
 @export var isometric_factor: float = 0.577  # tan(30°) for isometric projection
+@export var elevation_sort_bias: int = 200
 
 # Action Points system
 var current_ap: int = 10
@@ -39,8 +40,10 @@ var disengage_active: bool = false
 
 # Elevation tracking
 var current_elevation: int = 0
+var current_elevation_height: float = 0.0
 @onready var elevation_detector: Area2D = $ElevationDetector
 @onready var attack_area: Area2D = $AttackArea
+var _visual_root: Node2D
 
 # Movement vectors for 8-way isometric movement
 var movement_vectors = {
@@ -68,6 +71,8 @@ func _ready():
 		CombatManager.combat_ended.connect(_on_combat_ended)
 	# Create a basic visual representation
 	create_player_sprite()
+	_apply_elevation_visuals()
+	_update_depth_sort()
 
 func _physics_process(delta):
 	if _is_dead:
@@ -80,6 +85,7 @@ func _physics_process(delta):
 		combat_move_cooldown_timer = max(0.0, combat_move_cooldown_timer - delta)
 	handle_movement()
 	handle_attack_input()
+	_update_depth_sort()
 
 func handle_turn_input():
 	if not CombatManager:
@@ -239,6 +245,8 @@ func _find_attack_target() -> Node:
 	for body in bodies:
 		if body == null or not body.is_in_group("enemy"):
 			continue
+		if body.has_method("get_elevation_level") and body.get_elevation_level() != current_elevation:
+			continue
 		var distance := global_position.distance_to(body.global_position)
 		if distance < best_distance:
 			best_distance = distance
@@ -332,6 +340,9 @@ func _on_combat_ended() -> void:
 func get_current_hp() -> int:
 	return current_hp
 
+func get_elevation_level() -> int:
+	return current_elevation
+
 func get_max_hp() -> int:
 	return max_hp
 
@@ -368,6 +379,7 @@ func create_player_sprite():
 	"""Creates a faux-3D block so the player has depth."""
 	var sprite := $Sprite2D
 	_build_depth_block(sprite, Vector2(32, 32), Color(0.2, 0.45, 1.0), 6.0)
+	_apply_ground_shadow(sprite, Vector2(26, 14))
 
 func _build_depth_block(sprite: Node, size: Vector2, base_color: Color, depth: float) -> void:
 	if not sprite:
@@ -381,35 +393,57 @@ func _build_depth_block(sprite: Node, size: Vector2, base_color: Color, depth: f
 	shadow.z_index = -3
 	sprite.add_child(shadow)
 
+	var visual_root := Node2D.new()
+	visual_root.name = "VisualRoot"
+	sprite.add_child(visual_root)
+	_visual_root = visual_root
+
 	var side := ColorRect.new()
 	side.size = Vector2(size.x, depth)
 	side.color = base_color.darkened(0.35)
 	side.position = Vector2(-size.x * 0.5, size.y * 0.5)
 	side.z_index = -1
-	sprite.add_child(side)
+	visual_root.add_child(side)
 
 	var top := ColorRect.new()
 	top.size = size
 	top.color = base_color
 	top.position = Vector2(-size.x * 0.5, -size.y * 0.5)
 	top.z_index = 0
-	sprite.add_child(top)
+	visual_root.add_child(top)
 
 	var highlight := ColorRect.new()
 	highlight.size = Vector2(size.x, 3.0)
 	highlight.color = Color(1.0, 1.0, 1.0, 0.15)
 	highlight.position = top.position
 	highlight.z_index = 1
-	sprite.add_child(highlight)
+	visual_root.add_child(highlight)
+
+func _apply_ground_shadow(sprite: Node, size: Vector2) -> void:
+	if not sprite:
+		return
+	var shadow := ColorRect.new()
+	shadow.name = "GroundShadow"
+	shadow.size = size
+	shadow.color = Color(0.0, 0.0, 0.0, 0.35)
+	shadow.position = Vector2(-size.x * 0.5, size.y * 0.5 - 4.0)
+	shadow.z_index = -4
+	sprite.add_child(shadow)
 
 func _on_elevation_area_entered(area: Area2D):
 	if area is ElevationArea:
 		current_elevation = area.elevation_level
+		current_elevation_height = area.elevation_height
+		_apply_elevation_visuals()
+		_update_depth_sort()
 		print("Entered elevation ", current_elevation)
 
 func _on_elevation_area_exited(area: Area2D):
 	if area is ElevationArea and area.elevation_level == current_elevation:
 		current_elevation = 0
+		current_elevation_height = 0.0
+		_apply_elevation_visuals()
+		_update_depth_sort()
 		print("Exited elevation; now ", current_elevation)
 
 func _configure_attack_area() -> void:
@@ -429,6 +463,17 @@ func _get_damage_reduction() -> int:
 	if current_stance == Stance.GUARD:
 		return 1
 	return 0
+
+func _apply_elevation_visuals() -> void:
+	if _visual_root:
+		_visual_root.position = Vector2(0.0, -current_elevation_height)
+	else:
+		var sprite := $Sprite2D if has_node("Sprite2D") else null
+		if sprite:
+			sprite.position = Vector2(0.0, -current_elevation_height)
+
+func _update_depth_sort() -> void:
+	z_index = int(global_position.y) + current_elevation * elevation_sort_bias
 
 func handle_stance_input() -> void:
 	if not CombatManager or not CombatManager.active_combat:
@@ -512,5 +557,5 @@ func _spawn_damage_popup(amount: int, color: Color) -> void:
 	var popup := DamagePopup.new()
 	popup.amount = amount
 	popup.color = color
-	popup.global_position = global_position + Vector2(0, -20)
+	popup.global_position = global_position + Vector2(0, -20 - current_elevation_height)
 	scene.add_child(popup)

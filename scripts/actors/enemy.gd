@@ -3,6 +3,7 @@ extends CharacterBody2D
 class_name Enemy
 
 const DamagePopup = preload("res://scripts/ui/damage_popup.gd")
+const ElevationArea = preload("res://scripts/world/elevation_area.gd")
 const EnemyThreatVisual = preload("res://scripts/ui/enemy_threat_visual.gd")
 
 const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
@@ -14,10 +15,15 @@ const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
 @export var attack_damage: int = 2
 @export var ranged_attack_range: float = 240.0
 @export var ranged_attack_damage: int = 2
+@export var elevation_sort_bias: int = 200
 var current_ap: int = 0
 var current_hp: int = 0
+var current_elevation: int = 0
+var current_elevation_height: float = 0.0
 @onready var ai = $AI
 @onready var attack_area: Area2D = $AttackArea
+@onready var elevation_detector: Area2D = $ElevationDetector
+var _visual_root: Node2D
 @onready var nav_agent: NavigationAgent2D = $NavigationAgent2D
 var _hit_tween: Tween
 
@@ -26,14 +32,22 @@ func _ready() -> void:
 	current_ap = max_ap
 	add_to_group("enemy")
 	_configure_attack_area()
+	elevation_detector.area_entered.connect(_on_elevation_area_entered)
+	elevation_detector.area_exited.connect(_on_elevation_area_exited)
 	_create_enemy_sprite()
+	_apply_elevation_visuals()
+	_update_depth_sort()
 	_create_threat_visual()
 	if CombatManager:
 		CombatManager.turn_started.connect(_on_turn_started)
 
+func _physics_process(_delta: float) -> void:
+	_update_depth_sort()
+
 func _create_enemy_sprite() -> void:
 	var sprite := $Sprite2D
 	_build_depth_block(sprite, Vector2(28, 28), Color(0.9, 0.2, 0.2), 6.0)
+	_apply_ground_shadow(sprite, Vector2(22, 12))
 
 func _build_depth_block(sprite: Node, size: Vector2, base_color: Color, depth: float) -> void:
 	if not sprite:
@@ -47,26 +61,56 @@ func _build_depth_block(sprite: Node, size: Vector2, base_color: Color, depth: f
 	shadow.z_index = -3
 	sprite.add_child(shadow)
 
+	var visual_root := Node2D.new()
+	visual_root.name = "VisualRoot"
+	sprite.add_child(visual_root)
+	_visual_root = visual_root
+
 	var side := ColorRect.new()
 	side.size = Vector2(size.x, depth)
 	side.color = base_color.darkened(0.4)
 	side.position = Vector2(-size.x * 0.5, size.y * 0.5)
 	side.z_index = -1
-	sprite.add_child(side)
+	visual_root.add_child(side)
 
 	var top := ColorRect.new()
 	top.size = size
 	top.color = base_color
 	top.position = Vector2(-size.x * 0.5, -size.y * 0.5)
 	top.z_index = 0
-	sprite.add_child(top)
+	visual_root.add_child(top)
 
 	var highlight := ColorRect.new()
 	highlight.size = Vector2(size.x, 3.0)
 	highlight.color = Color(1.0, 1.0, 1.0, 0.12)
 	highlight.position = top.position
 	highlight.z_index = 1
-	sprite.add_child(highlight)
+	visual_root.add_child(highlight)
+
+func _apply_ground_shadow(sprite: Node, size: Vector2) -> void:
+	if not sprite:
+		return
+	var shadow := ColorRect.new()
+	shadow.name = "GroundShadow"
+	shadow.size = size
+	shadow.color = Color(0.0, 0.0, 0.0, 0.4)
+	shadow.position = Vector2(-size.x * 0.5, size.y * 0.5 - 4.0)
+	shadow.z_index = -4
+	sprite.add_child(shadow)
+
+func _on_elevation_area_entered(area: Area2D) -> void:
+	if area is ElevationArea:
+		current_elevation = area.elevation_level
+		current_elevation_height = area.elevation_height
+		_apply_elevation_visuals()
+		_update_depth_sort()
+
+func _on_elevation_area_exited(area: Area2D) -> void:
+	if area is ElevationArea and area.elevation_level == current_elevation:
+		current_elevation = 0
+		current_elevation_height = 0.0
+		_apply_elevation_visuals()
+		_update_depth_sort()
 
 func move_towards(target_position: Vector2, distance: float = 0.0) -> void:
 	var step := distance if distance > 0.0 else move_step
@@ -96,6 +140,8 @@ func attack(target: Node) -> void:
 
 func can_attack_ranged(target: Node) -> bool:
 	if not target:
+		return false
+	if target.has_method("get_elevation_level") and target.get_elevation_level() != current_elevation:
 		return false
 	if global_position.distance_to(target.global_position) > ranged_attack_range:
 		return false
@@ -162,6 +208,9 @@ func get_current_hp() -> int:
 func get_max_hp() -> int:
 	return max_hp
 
+func get_elevation_level() -> int:
+	return current_elevation
+
 func get_attack_contact_distance() -> float:
 	return attack_contact_distance
 
@@ -175,6 +224,8 @@ func get_attack_targets() -> Array:
 	var targets: Array = []
 	for body in bodies:
 		if body != null and body.is_in_group("player"):
+			if body.has_method("get_elevation_level") and body.get_elevation_level() != current_elevation:
+				continue
 			targets.append(body)
 	return targets
 
@@ -215,6 +266,17 @@ func _play_death_effect() -> void:
 	tween.tween_property(sprite, "scale", Vector2(0.1, 0.1), 0.2)
 	tween.parallel().tween_property(sprite, "modulate:a", 0.0, 0.2)
 
+func _apply_elevation_visuals() -> void:
+	if _visual_root:
+		_visual_root.position = Vector2(0.0, -current_elevation_height)
+	else:
+		var sprite := $Sprite2D if has_node("Sprite2D") else null
+		if sprite:
+			sprite.position = Vector2(0.0, -current_elevation_height)
+
+func _update_depth_sort() -> void:
+	z_index = int(global_position.y) + current_elevation * elevation_sort_bias
+
 func _configure_attack_area() -> void:
 	if not attack_area:
 		return
@@ -246,7 +308,7 @@ func _spawn_damage_popup(amount: int, color: Color) -> void:
 	var popup := DamagePopup.new()
 	popup.amount = amount
 	popup.color = color
-	popup.global_position = global_position + Vector2(0, -20)
+	popup.global_position = global_position + Vector2(0, -20 - current_elevation_height)
 	scene.add_child(popup)
 
 func _create_threat_visual() -> void:
