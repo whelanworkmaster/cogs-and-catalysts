@@ -20,6 +20,7 @@ extends Node2D
 @export var obstacle_spacing: float = 120.0
 @export var procgen_seed: int = 0
 @export var procgen_margin: Vector2 = Vector2(80, 80)
+@export var procgen_attempts: int = 50
 @export var nav_bounds_size: Vector2 = Vector2(1200, 840)
 @export var grid_cell_size: Vector2 = Vector2(32, 32)
 @onready var nav_region: NavigationRegion2D = $NavigationRegion2D
@@ -214,12 +215,14 @@ func _polygon_signed_area(points: PackedVector2Array) -> float:
 	return area * 0.5
 
 func _setup_procgen() -> void:
+	_grid_origin = Vector2(-nav_bounds_size.x * 0.5, -nav_bounds_size.y * 0.5)
 	_seed_rng()
 	if debug_procgen:
 		print("Procgen: seed=", procgen_seed, " margin=", procgen_margin, " buildings=", building_count_min, "-", building_count_max, " vents=", vent_count_min, "-", vent_count_max, " enemies=", enemy_count)
 	_randomize_obstacles()
-	_spawn_enemies()
+	_refresh_grid_overlay()
 	_position_player()
+	_spawn_enemies()
 	_randomize_steam_vents()
 
 func _seed_rng() -> void:
@@ -281,6 +284,11 @@ func _randomize_obstacles() -> void:
 			placed_rects.append(new_rect)
 		elif debug_procgen:
 			print("Procgen: failed to place obstacle ", zone.name, " size=", rect.size)
+
+func _refresh_grid_overlay() -> void:
+	var grid := get_node_or_null("GridOverlay")
+	if grid and grid.has_method("refresh"):
+		grid.call("refresh")
 
 func _randomize_steam_vents() -> void:
 	var vents: Array[Node] = _get_steam_vents()
@@ -352,11 +360,18 @@ func _spawn_enemies() -> void:
 			extra.queue_free()
 	var enemies := get_tree().get_nodes_in_group("enemy")
 	var placed: Array[Vector2] = []
+	var player_pos: Vector2 = INVALID_POS
+	var player := get_tree().get_first_node_in_group("player")
+	if player is Node2D:
+		player_pos = (player as Node2D).global_position
 	for enemy in enemies:
 		var node := enemy as Node2D
 		if not node:
 			continue
-		var pos: Vector2 = _pick_position(placed, min_enemy_spacing)
+		var avoid: Array[Vector2] = placed.duplicate()
+		if _is_valid_position(player_pos):
+			avoid.append(player_pos)
+		var pos: Vector2 = _pick_position(avoid, min_enemy_spacing, min_player_obstacle_spacing)
 		if _is_valid_position(pos):
 			node.global_position = pos
 			placed.append(pos)
@@ -365,23 +380,24 @@ func _position_player() -> void:
 	var player := get_tree().get_first_node_in_group("player")
 	if not player:
 		return
-	var avoid: Array[Vector2] = []
-	var enemies := get_tree().get_nodes_in_group("enemy")
-	for enemy in enemies:
-		if enemy is Node2D:
-			avoid.append((enemy as Node2D).global_position)
-	var pos: Vector2 = _pick_position(avoid, min_player_enemy_spacing, min_player_obstacle_spacing)
+	var pos: Vector2 = _pick_position([], 0.0, min_player_obstacle_spacing)
 	if _is_valid_position(pos):
 		player.global_position = pos
 
 func _try_place_rect(size: Vector2, placed_rects: Array[Rect2]) -> Vector2:
-	var attempts := 30
+	var attempts: int = maxi(procgen_attempts, 10)
 	for _i in range(attempts):
-		var pos: Vector2 = _random_position_in_bounds()
+		var pos: Vector2 = _snap_to_grid(_random_position_in_bounds_for_size(size))
 		var rect := Rect2(pos - size * 0.5, size)
 		if _rects_overlap(rect, placed_rects, obstacle_spacing):
 			continue
 		return pos
+	for _i in range(attempts):
+		var pos_relaxed: Vector2 = _snap_to_grid(_random_position_in_bounds_for_size(size))
+		var rect_relaxed := Rect2(pos_relaxed - size * 0.5, size)
+		if _rects_overlap(rect_relaxed, placed_rects, 0.0):
+			continue
+		return pos_relaxed
 	return INVALID_POS
 
 func _rects_overlap(rect: Rect2, placed_rects: Array[Rect2], padding: float) -> bool:
@@ -392,9 +408,11 @@ func _rects_overlap(rect: Rect2, placed_rects: Array[Rect2], padding: float) -> 
 	return false
 
 func _pick_position(avoid_points: Array[Vector2] = [], min_spacing: float = 0.0, min_obstacle_spacing: float = 0.0) -> Vector2:
-	var attempts := 40
+	var attempts: int = maxi(procgen_attempts, 10)
+	var best_pos: Vector2 = INVALID_POS
+	var best_score := -1.0
 	for _i in range(attempts):
-		var pos: Vector2 = _random_position_in_bounds()
+		var pos: Vector2 = _snap_to_grid(_random_position_in_bounds())
 		if _is_point_inside_obstacle(pos):
 			continue
 		if min_obstacle_spacing > 0.0 and _is_near_obstacle(pos, min_obstacle_spacing):
@@ -402,7 +420,15 @@ func _pick_position(avoid_points: Array[Vector2] = [], min_spacing: float = 0.0,
 		if min_spacing > 0.0 and _is_near_points(pos, avoid_points, min_spacing):
 			continue
 		return pos
-	return INVALID_POS
+	for _i in range(attempts):
+		var pos_relaxed: Vector2 = _snap_to_grid(_random_position_in_bounds())
+		if _is_point_inside_obstacle(pos_relaxed):
+			continue
+		var score := _score_position(pos_relaxed, avoid_points)
+		if score > best_score:
+			best_score = score
+			best_pos = pos_relaxed
+	return best_pos
 
 func _random_position_in_bounds() -> Vector2:
 	var half := nav_bounds_size * 0.5
@@ -410,6 +436,20 @@ func _random_position_in_bounds() -> Vector2:
 	var max_x := half.x - procgen_margin.x
 	var min_y := -half.y + procgen_margin.y
 	var max_y := half.y - procgen_margin.y
+	return Vector2(_rng.randf_range(min_x, max_x), _rng.randf_range(min_y, max_y))
+
+func _random_position_in_bounds_for_size(size: Vector2) -> Vector2:
+	var half := nav_bounds_size * 0.5
+	var min_x := -half.x + procgen_margin.x + size.x * 0.5
+	var max_x := half.x - procgen_margin.x - size.x * 0.5
+	var min_y := -half.y + procgen_margin.y + size.y * 0.5
+	var max_y := half.y - procgen_margin.y - size.y * 0.5
+	if min_x > max_x:
+		min_x = -half.x + procgen_margin.x
+		max_x = half.x - procgen_margin.x
+	if min_y > max_y:
+		min_y = -half.y + procgen_margin.y
+		max_y = half.y - procgen_margin.y
 	return Vector2(_rng.randf_range(min_x, max_x), _rng.randf_range(min_y, max_y))
 
 func _is_near_points(pos: Vector2, points: Array[Vector2], min_spacing: float) -> bool:
@@ -421,10 +461,21 @@ func _is_near_points(pos: Vector2, points: Array[Vector2], min_spacing: float) -
 func _is_valid_position(pos: Vector2) -> bool:
 	return pos != INVALID_POS
 
+func _snap_to_grid(pos: Vector2) -> Vector2:
+	if grid_cell_size.x <= 0.0 or grid_cell_size.y <= 0.0:
+		return pos
+	var cell: Vector2i = _world_to_cell(pos)
+	return _cell_to_world(cell)
+
+func snap_to_grid(pos: Vector2) -> Vector2:
+	return _snap_to_grid(pos)
+
 func _pick_vent_position(avoid_points: Array[Vector2], placed_vents: Array[Vector2], player_pos: Vector2) -> Vector2:
-	var attempts := 40
+	var attempts: int = maxi(procgen_attempts, 10)
+	var best_pos: Vector2 = INVALID_POS
+	var best_score := -1.0
 	for _i in range(attempts):
-		var pos: Vector2 = _random_position_in_bounds()
+		var pos: Vector2 = _snap_to_grid(_random_position_in_bounds())
 		if _is_point_inside_obstacle(pos):
 			continue
 		if min_vent_obstacle_spacing > 0.0 and _is_near_obstacle(pos, min_vent_obstacle_spacing):
@@ -436,7 +487,67 @@ func _pick_vent_position(avoid_points: Array[Vector2], placed_vents: Array[Vecto
 		if _is_valid_position(player_pos) and pos.distance_to(player_pos) < min_vent_player_spacing:
 			continue
 		return pos
-	return INVALID_POS
+	for _i in range(attempts):
+		var pos_relaxed: Vector2 = _snap_to_grid(_random_position_in_bounds())
+		if _is_point_inside_obstacle(pos_relaxed):
+			continue
+		if _is_valid_position(player_pos) and pos_relaxed.distance_to(player_pos) < min_vent_player_spacing * 0.5:
+			continue
+		var score := _score_position(pos_relaxed, avoid_points, placed_vents, player_pos)
+		if score > best_score:
+			best_score = score
+			best_pos = pos_relaxed
+	return best_pos
+
+func _score_position(pos: Vector2, avoid_points: Array[Vector2], extra_points: Array[Vector2] = [], player_pos: Vector2 = INVALID_POS) -> float:
+	var avoid_score := _min_distance_to_points(pos, avoid_points)
+	var extra_score := _min_distance_to_points(pos, extra_points)
+	var player_score := 99999.0
+	if _is_valid_position(player_pos):
+		player_score = pos.distance_to(player_pos)
+	var obstacle_score := _min_distance_to_obstacles(pos)
+	var edge_score := _distance_to_bounds(pos)
+	return min(min(min(avoid_score, extra_score), player_score), min(obstacle_score, edge_score))
+
+func _min_distance_to_points(pos: Vector2, points: Array[Vector2]) -> float:
+	if points.is_empty():
+		return 99999.0
+	var best := 99999.0
+	for point in points:
+		var dist := pos.distance_to(point)
+		if dist < best:
+			best = dist
+	return best
+
+func _min_distance_to_obstacles(pos: Vector2) -> float:
+	var obstacles: Array[Node] = _get_nav_obstacles()
+	var best := 99999.0
+	for obstacle in obstacles:
+		var zone := obstacle as Node2D
+		if not zone:
+			continue
+		var rect := _get_obstacle_rect(zone)
+		if rect.size == Vector2.ZERO:
+			continue
+		var dist := _distance_to_rect(pos, rect)
+		if dist < best:
+			best = dist
+	return best
+
+func _distance_to_rect(pos: Vector2, rect: Rect2) -> float:
+	var clamped_x := clampf(pos.x, rect.position.x, rect.position.x + rect.size.x)
+	var clamped_y := clampf(pos.y, rect.position.y, rect.position.y + rect.size.y)
+	return pos.distance_to(Vector2(clamped_x, clamped_y))
+
+func _distance_to_bounds(pos: Vector2) -> float:
+	var half := nav_bounds_size * 0.5
+	var min_x := -half.x + procgen_margin.x
+	var max_x := half.x - procgen_margin.x
+	var min_y := -half.y + procgen_margin.y
+	var max_y := half.y - procgen_margin.y
+	var dx: float = minf(pos.x - min_x, max_x - pos.x)
+	var dy: float = minf(pos.y - min_y, max_y - pos.y)
+	return minf(dx, dy)
 
 func _is_point_inside_obstacle(pos: Vector2) -> bool:
 	var obstacles: Array[Node] = _get_nav_obstacles()

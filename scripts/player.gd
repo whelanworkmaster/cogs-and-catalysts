@@ -124,6 +124,9 @@ func handle_movement():
 			if spend_ap(_get_ap_cost("move")):
 				var step_distance: float = combat_step_distance
 				var next_position: Vector2 = global_position + input_direction * step_distance
+				var world := get_tree().current_scene
+				if world and world.has_method("snap_to_grid"):
+					next_position = world.snap_to_grid(next_position)
 				_attempt_reaction_attack(next_position)
 				global_position = next_position
 				combat_move_cooldown_timer = combat_move_cooldown

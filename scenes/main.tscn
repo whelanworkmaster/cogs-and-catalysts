@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://b8x7y302a1c4e"]
+[gd_scene load_steps=12 format=3 uid="uid://b8x7y302a1c4e"]
 
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_km6kn"]
 [ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="2_1q8s0"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/world/main.gd" id="4_main"]
 [ext_resource type="Script" path="res://scripts/world/steam_vent.gd" id="5_steam_vent"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over.tscn" id="6_game_over"]
+[ext_resource type="Script" path="res://scripts/world/grid_overlay.gd" id="7_grid_overlay"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_zone"]
 size = Vector2(200, 120)
@@ -25,6 +26,9 @@ script = ExtResource("4_main")
 debug_procgen = true
 
 [node name="NavigationRegion2D" type="NavigationRegion2D" parent="."]
+
+[node name="GridOverlay" type="Node2D" parent="."]
+script = ExtResource("7_grid_overlay")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(0, 0)

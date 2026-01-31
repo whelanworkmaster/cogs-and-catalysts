@@ -74,12 +74,16 @@ func move_towards(target_position: Vector2, distance: float = 0.0) -> void:
 	if world and world.has_method("get_astar_path"):
 		var path: PackedVector2Array = world.get_astar_path(global_position, target_position)
 		if path.size() > 1:
-			var next_pos := path[1]
+			var next_pos: Vector2 = path[1]
+			if world.has_method("snap_to_grid"):
+				next_pos = world.snap_to_grid(next_pos)
 			var to_next := next_pos - global_position
 			if to_next == Vector2.ZERO:
 				return
 			var motion: Vector2 = to_next.normalized() * min(step, to_next.length())
-			move_and_collide(motion)
+			var collision: KinematicCollision2D = move_and_collide(motion)
+			if collision == null and world.has_method("snap_to_grid"):
+				global_position = world.snap_to_grid(global_position)
 			return
 		print("Enemy path empty or too short. pos=", global_position, " target=", target_position, " path_size=", path.size())
 		return
