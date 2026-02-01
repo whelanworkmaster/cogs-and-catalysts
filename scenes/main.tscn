@@ -4,6 +4,7 @@
 [ext_resource type="Script" path="res://scripts/camera/camera_rig.gd" id="5_camera"]
 [ext_resource type="PackedScene" uid="uid://bcb5dy2tgvfdj" path="res://scenes/ui/combat_hud.tscn" id="3_2h1x5"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over.tscn" id="6_game_over"]
+[ext_resource type="PackedScene" uid="uid://d1k6rj0x6c2mj" path="res://scenes/player.tscn" id="7_player"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -37,6 +38,8 @@ environment = SubResource("Environment_1")
 [node name="GroundPlane" type="CSGBox3D" parent="."]
 size = Vector3(1200, 1, 840)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+
+[node name="Player" parent="." instance=ExtResource("7_player")]
 
 [node name="CombatHUD" parent="." instance=ExtResource("3_2h1x5")]
 

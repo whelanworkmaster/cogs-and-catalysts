@@ -2,30 +2,32 @@
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_4gq3m"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_1x8m7"]
-size = Vector2(32, 32)
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(32, 32, 32)
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_detector"]
-size = Vector2(24, 24)
-
-[sub_resource type="CircleShape2D" id="CircleShape2D_attack"]
+[sub_resource type="SphereShape3D" id="SphereShape3D_attack"]
 radius = 40.0
 
-[node name="Player" type="CharacterBody2D"]
+[node name="Player" type="CharacterBody3D"]
 script = ExtResource("1_4gq3m")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="VisualRoot" type="Node3D" parent="."]
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("RectangleShape2D_1x8m7")
+[node name="BodyBox" type="CSGBox3D" parent="VisualRoot"]
+size = Vector3(32, 32, 32)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16, 0)
 
-[node name="ElevationDetector" type="Area2D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_body")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16, 0)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationDetector"]
-shape = SubResource("RectangleShape2D_elev_detector")
+[node name="ElevationDetector" type="Area3D" parent="."]
 
-[node name="AttackArea" type="Area2D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ElevationDetector"]
+shape = SubResource("BoxShape3D_body")
+
+[node name="AttackArea" type="Area3D" parent="."]
 monitoring = true
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
-shape = SubResource("CircleShape2D_attack")
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AttackArea"]
+shape = SubResource("SphereShape3D_attack")
