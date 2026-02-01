@@ -129,19 +129,10 @@ func ranged_attack(target: Node) -> void:
 		target.take_damage(ranged_attack_damage, self)
 
 func _has_clear_shot(target: Node) -> bool:
-	var space := get_world_3d().direct_space_state if get_world_3d() else null
-	if not space:
-		return true
-	var from: Vector3 = global_position + Vector3(0, 16, 0)
-	var to: Vector3 = Vector3(target.global_position.x, target.global_position.y, target.global_position.z) + Vector3(0, 16, 0)
-	var query := PhysicsRayQueryParameters3D.create(from, to)
-	query.exclude = [get_rid()]
-	query.collide_with_bodies = true
-	query.collide_with_areas = false
-	var result := space.intersect_ray(query)
-	if result.is_empty():
-		return true
-	return result.collider == target
+	var world := get_tree().current_scene
+	if world and world.has_method("has_clear_los"):
+		return world.has_clear_los(global_position, target.global_position)
+	return true
 
 func _spawn_ranged_shot_line(target_pos: Vector3) -> void:
 	var scene := get_tree().current_scene if get_tree() else null

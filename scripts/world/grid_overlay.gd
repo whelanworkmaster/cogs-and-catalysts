@@ -113,9 +113,8 @@ func _get_nav_obstacles() -> Array[Node]:
 	if typed.is_empty():
 		var root := get_tree().current_scene
 		if root:
-			for type_name in ["Area3D", "Area2D"]:
-				var found := root.find_children("", type_name, true, false)
-				for node in found:
-					if node is Node and node.has_node("ElevationBlocker"):
-						typed.append(node)
+			var found := root.find_children("", "Area3D", true, false)
+			for node in found:
+				if node is Node and node.has_node("ElevationBlocker"):
+					typed.append(node)
 	return typed

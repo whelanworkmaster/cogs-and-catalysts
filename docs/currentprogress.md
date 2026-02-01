@@ -3,7 +3,7 @@
 ## Overall Plan (High Level)
 1) Foundation (Godot 4.x)
    - Core scenes: Main, Player, World, Combat HUD.
-   - Movement + elevation handling (isometric + fake Z).
+   - Movement + elevation handling (real 3D with CSG primitives).
    - Data-driven setup (Resources for stats, abilities, mutations).
 
 2) LUMEN Combat Loop
@@ -26,66 +26,91 @@
    - Extraction race vs. clocks.
 
 ## Where We Are Now
-- Project structure refactored (`scenes/`, `scripts/`, `scripts/world`, `scripts/systems`, `scripts/ai`, `scripts/ui`, `scripts/actors`).
+- **Full 3D migration complete.** The project has been ported from 2D (fake 2.5D elevation) to real 3D using CSG primitives and an orthographic orbit camera.
+- Project structure: `scenes/`, `scripts/`, `scripts/world`, `scripts/systems`, `scripts/ai`, `scripts/ui`, `scripts/actors`.
 - GameMode singleton with exploration vs. turn-based states.
 - CombatManager singleton with turn order and start/end combat.
-- Combat now auto-starts on scene load (no engagement trigger).
-- Player movement:
-  - Exploration: free movement, no AP cost.
-  - Combat: AP-spending step movement with cooldown.
-  - AP resets at the start of the player's turn.
-- Enemy actor:
-  - AI state scaffold (idle -> seek).
-  - AP-based movement toward player until in ranged attack distance, then fires.
-  - Ranged attacks use line-of-sight checks (blocked by solid collision).
-  - A* grid pathfinding around blockers + collision-aware movement.
-- Deterministic combat MVP:
-    - Player attack (overlap range) with AP cost and damage.
-  - Enemy HP/damage/death with mutagenic cell drop + simple death tween.
-    - Enemy ranged attacks on its turn when in range.
-  - Combat auto-ends when only the player remains.
-- Combat polish:
-  - Player HP, damage feedback, and mutagenic cell pickup with UI readouts.
-  - Stances (Neutral/Guard/Aggress/Evade), Disengage toggle, and reaction attacks on leaving threat range.
-  - Hit feedback (flash + squash/stretch) and floating damage numbers.
-- Visuals:
-  - Partial 2.5D elevation cues (lifted platform faces, underhangs, right face, grounded actor shadows).
-  - Faux-3D depth blocks for player, enemy, and building zones.
-  - Player-attached combat overlay removed; enemy threat ring remains.
-  - Added extra building zones to create navigation obstacles.
-  - Grid overlay drawn on the navigation cell layout (skips building footprints).
-- Hazards:
-  - Steam vent hazard that ticks Toxicity on contact.
-- FitD clocks (UI + logic):
-  - Detection/Toxicity clocks displayed in HUD.
-  - Detection ticks on combat start + player moves + player attacks.
-  - Toxicity ticks when player takes damage and prints alarm.
-- Player death:
-  - Death animation (color shift + shrink/fade) and Game Over overlay with retry.
-- Procgen (first pass):
-  - Spawn positions are snapped to grid cells; player/enemy movement snaps to grid in combat.
-  - Randomized building layout (4–6 by default).
-  - Randomized enemy count/placement and player start with spacing checks.
-  - Randomized steam vent count (2–3) and placement with spacing vs. buildings/enemies/player.
+- Combat auto-starts on scene load.
+
+### Camera
+- Orthographic Camera3D with fixed-pitch (45-degree) orbit (BG3/XCOM style).
+- Middle mouse drag = yaw rotation, scroll wheel = zoom.
+- Camera follows player with smoothing.
+- Camera distance scales with zoom to prevent view clipping.
+
+### Player
+- CharacterBody3D with CSGBox3D visual (blue, 32x32x32).
+- Exploration: free movement on XZ plane, no AP cost.
+- Combat: AP-spending step movement with grid snapping and cooldown.
+- AP resets at the start of the player's turn.
+- Stances (Neutral/Guard/Aggress/Evade), Disengage toggle, reaction attacks on leaving threat range.
+- Hit feedback (flash + squash/stretch) and floating damage numbers via `camera.unproject_position()`.
+- Death animation and Game Over overlay with retry.
+- Mutagenic cell pickup.
+
+### Enemy
+- CharacterBody3D with CSGBox3D visual (red, 28x28x28).
+- AI state scaffold (idle -> seek) with AP-based movement.
+- A* grid pathfinding around blockers (AStarGrid2D internally, Vector3 wrappers externally).
+- Ranged attacks use 3D raycast line-of-sight checks (PhysicsRayQueryParameters3D).
+- Ranged shot visual: ImmediateMesh line with fade-out tween.
+- Death drops mutagenic cell.
+- Threat ring visual (ImmediateMesh circle on ground).
+
+### World / Procgen
+- Node3D scene root with AStarGrid2D pathfinding on the XZ plane.
+- `snap_to_grid()` and `get_astar_path_3d()` accept both Vector2 and Vector3.
+- Randomized building layout (4-6 buildings, CSGBox3D with StaticBody3D blockers).
+- Randomized enemy count/placement and player start with spacing checks.
+- Randomized steam vent placement (2-3 vents) with spacing vs. buildings/enemies/player.
+- Grid overlay: ImmediateMesh line grid on XZ plane, skips building footprints.
+- Ground plane: CSGBox3D (4000x1x4000).
+
+### Elevation
+- Buildings are real 3D CSGBox3D volumes with StaticBody3D collision.
+- Area3D detection zones on top surface trigger elevation changes.
+- Actors set `global_position.y = elevation_height` when entering/exiting zones.
+- Elevation zones added to `nav_obstacle` group for pathfinding exclusion.
+
+### Hazards
+- Steam vent: Area3D with CSGBox3D visual, ticks Toxicity on contact.
+- Mutagenic cell: Node3D with emissive CSGBox3D, Area3D + SphereShape3D pickup.
+
+### Combat Visuals
+- Stance ring (color-coded by stance) and dashed disengage ring: MeshInstance3D + ImmediateMesh.
+- Enemy threat range ring: MeshInstance3D + ImmediateMesh.
+- Damage popups: screen-space via `camera.unproject_position()`.
+
+### FitD Clocks
+- Detection/Toxicity clocks displayed in HUD.
+- Detection ticks on combat start + player moves + player attacks.
+- Toxicity ticks when player takes damage and on steam vent contact.
+
+### Lighting
+- DirectionalLight3D with shadows.
+- WorldEnvironment with dark background and ambient light.
 
 ## Current Files / Systems
+- `scripts/camera/camera_rig.gd`
 - `scripts/systems/game_mode_controller.gd`
 - `scripts/systems/combat_manager.gd`
+- `scripts/systems/clock.gd`
 - `scripts/world/main.gd`
+- `scripts/world/elevation_area.gd`
+- `scripts/world/steam_vent.gd`
+- `scripts/world/mutagenic_cell.gd`
+- `scripts/world/grid_overlay.gd`
+- `scripts/player.gd`
 - `scripts/actors/enemy.gd`
 - `scripts/ai/ai_state.gd`
 - `scripts/ai/enemy_ai.gd`
 - `scripts/ai/states/idle_state.gd`
 - `scripts/ai/states/seek_state.gd`
 - `scripts/ui/combat_hud.gd`
-- `scripts/ui/damage_popup.gd`
 - `scripts/ui/combat_overlay.gd`
 - `scripts/ui/enemy_threat_visual.gd`
+- `scripts/ui/damage_popup.gd`
 - `scripts/ui/game_over.gd`
-- `scripts/systems/clock.gd`
-- `scripts/world/mutagenic_cell.gd`
-- `scripts/world/steam_vent.gd`
-- `scripts/world/grid_overlay.gd`
 - `scenes/main.tscn`, `scenes/player.tscn`, `scenes/enemy.tscn`, `scenes/ui/combat_hud.tscn`, `scenes/ui/game_over.tscn`
 
 ## Next Steps (Suggested Order)
@@ -115,6 +140,8 @@
    - Vault + Reinforcement clocks driving extraction.
 
 ## Notes
-- Combat movement currently uses a cooldown to prevent AP burn when holding a key.
+- All distance constants are in pixel scale (32, 40, 240, 750). Works but the world is very large. Scale normalization is a future pass.
+- Arrow key movement is world-relative (not camera-relative). Camera-relative input is a future enhancement.
+- Combat movement uses a cooldown to prevent AP burn when holding a key.
 - The player is in the `player` group for AI targeting.
-- Procgen runs after scene load to ensure obstacle groups are populated.
+- Procgen runs after scene load (deferred) to ensure obstacle groups are populated.

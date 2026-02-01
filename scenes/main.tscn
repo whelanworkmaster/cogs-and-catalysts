@@ -19,14 +19,15 @@ ambient_light_energy = 0.6
 
 [node name="Main" type="Node3D"]
 script = ExtResource("4_main")
-use_procgen = false
-auto_start_combat = false
+use_procgen = true
+auto_start_combat = true
 
 [node name="CameraRig" type="Node3D" parent="."]
 script = ExtResource("5_camera")
 initial_zoom = 400.0
 min_zoom = 100.0
 max_zoom = 800.0
+follow_target = NodePath("../Player")
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
 projection = 1

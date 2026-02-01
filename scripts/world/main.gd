@@ -75,11 +75,10 @@ func _build_astar_grid() -> void:
 		var root := get_tree().current_scene
 		if root:
 			var filtered: Array[Node] = []
-			for type_name in ["Area3D", "Area2D"]:
-				var found := root.find_children("", type_name, true, false)
-				for node in found:
-					if node is Node and node.has_node("ElevationBlocker"):
-						filtered.append(node)
+			var found := root.find_children("", "Area3D", true, false)
+			for node in found:
+				if node is Node and node.has_node("ElevationBlocker"):
+					filtered.append(node)
 			obstacles = filtered
 	for obstacle in obstacles:
 		var rect := _get_obstacle_rect_from_node(obstacle)
@@ -265,15 +264,11 @@ func _randomize_steam_vents() -> void:
 	if player is Node3D:
 		var p3: Vector3 = (player as Node3D).global_position
 		player_pos = Vector2(p3.x, p3.z)
-	elif player is Node2D:
-		player_pos = (player as Node2D).global_position
 	var enemies := get_tree().get_nodes_in_group("enemy")
 	for enemy in enemies:
 		if enemy is Node3D:
 			var ep: Vector3 = (enemy as Node3D).global_position
 			avoid_points.append(Vector2(ep.x, ep.z))
-		elif enemy is Node2D:
-			avoid_points.append((enemy as Node2D).global_position)
 	var placed_vents: Array[Vector2] = []
 	for vent in vents:
 		var node := vent as Node3D
@@ -304,8 +299,6 @@ func _spawn_enemies() -> void:
 	if player is Node3D:
 		var p3: Vector3 = (player as Node3D).global_position
 		player_pos = Vector2(p3.x, p3.z)
-	elif player is Node2D:
-		player_pos = (player as Node2D).global_position
 	for enemy in enemies:
 		var node := enemy as Node3D
 		if not node:
@@ -326,8 +319,6 @@ func _position_player() -> void:
 	if _is_valid_position(pos):
 		if player is Node3D:
 			(player as Node3D).global_position = Vector3(pos.x, 0, pos.y)
-		elif player is Node2D:
-			(player as Node2D).global_position = pos
 
 func _try_place_rect(size: Vector2, placed_rects: Array[Rect2]) -> Vector2:
 	var attempts: int = maxi(procgen_attempts, 10)
@@ -503,6 +494,69 @@ func _distance_to_bounds(pos: Vector2) -> float:
 	var dy: float = minf(pos.y - min_y, max_y - pos.y)
 	return minf(dx, dy)
 
+func has_clear_los(from_pos: Vector3, to_pos: Vector3) -> bool:
+	var a := Vector2(from_pos.x, from_pos.z)
+	var b := Vector2(to_pos.x, to_pos.z)
+	var obstacles: Array[Node] = _get_nav_obstacles()
+	for obstacle in obstacles:
+		var rect := _los_rect_for_obstacle(obstacle)
+		if rect.size == Vector2.ZERO:
+			continue
+		if _segment_intersects_rect(a, b, rect):
+			return false
+	return true
+
+func _los_rect_for_obstacle(obstacle: Node) -> Rect2:
+	if not obstacle is Node3D:
+		return Rect2()
+	var node := obstacle as Node3D
+	var center := Vector2(node.global_position.x, node.global_position.z)
+	if "building_size" in node:
+		var bs: Vector3 = node.building_size
+		var size := Vector2(bs.x, bs.z)
+		return Rect2(center - size * 0.5, size)
+	return _get_obstacle_rect(obstacle)
+
+func _segment_intersects_rect(a: Vector2, b: Vector2, rect: Rect2) -> bool:
+	var min_pt := rect.position
+	var max_pt := rect.position + rect.size
+	var d := b - a
+	var t_min := 0.0
+	var t_max := 1.0
+	# Check X slab
+	if abs(d.x) < 0.0001:
+		if a.x < min_pt.x or a.x > max_pt.x:
+			return false
+	else:
+		var inv_d := 1.0 / d.x
+		var t1 := (min_pt.x - a.x) * inv_d
+		var t2 := (max_pt.x - a.x) * inv_d
+		if t1 > t2:
+			var tmp := t1
+			t1 = t2
+			t2 = tmp
+		t_min = maxf(t_min, t1)
+		t_max = minf(t_max, t2)
+		if t_min > t_max:
+			return false
+	# Check Y slab (Z in world space)
+	if abs(d.y) < 0.0001:
+		if a.y < min_pt.y or a.y > max_pt.y:
+			return false
+	else:
+		var inv_d := 1.0 / d.y
+		var t1 := (min_pt.y - a.y) * inv_d
+		var t2 := (max_pt.y - a.y) * inv_d
+		if t1 > t2:
+			var tmp := t1
+			t1 = t2
+			t2 = tmp
+		t_min = maxf(t_min, t1)
+		t_max = minf(t_max, t2)
+		if t_min > t_max:
+			return false
+	return true
+
 func _is_point_inside_obstacle(pos: Vector2) -> bool:
 	var obstacles: Array[Node] = _get_nav_obstacles()
 	for obstacle in obstacles:
@@ -533,15 +587,6 @@ func _get_obstacle_rect_from_node(zone: Node) -> Rect2:
 			var world_pos: Vector3 = shape_3d.global_transform.origin
 			var xz_size := Vector2(box_shape.size.x, box_shape.size.z)
 			return Rect2(Vector2(world_pos.x, world_pos.z) - xz_size * 0.5, xz_size)
-	# Fallback to 2D shape
-	var shape_2d := zone.get_node_or_null("ElevationBlocker/CollisionShape2D")
-	if shape_2d and shape_2d is CollisionShape2D:
-		var rect_shape := shape_2d.shape as RectangleShape2D
-		if rect_shape:
-			var world_center: Vector2 = shape_2d.global_transform.origin
-			var scale: Vector2 = shape_2d.global_transform.get_scale().abs()
-			var size: Vector2 = rect_shape.size * scale
-			return Rect2(world_center - size * 0.5, size)
 	return Rect2()
 
 func _get_nav_obstacles() -> Array[Node]:
@@ -553,12 +598,10 @@ func _get_nav_obstacles() -> Array[Node]:
 	if typed.is_empty():
 		var root := get_tree().current_scene
 		if root:
-			# Search both 3D and 2D areas for backwards compatibility
-			for type_name in ["Area3D", "Area2D"]:
-				var found := root.find_children("", type_name, true, false)
-				for node in found:
-					if node is Node and node.has_node("ElevationBlocker"):
-						typed.append(node)
+			var found := root.find_children("", "Area3D", true, false)
+			for node in found:
+				if node is Node and node.has_node("ElevationBlocker"):
+					typed.append(node)
 	return typed
 
 func _get_steam_vents() -> Array[Node]:
@@ -570,9 +613,8 @@ func _get_steam_vents() -> Array[Node]:
 	if typed.is_empty():
 		var root := get_tree().current_scene
 		if root:
-			for type_name in ["Area3D", "Area2D"]:
-				var found := root.find_children("", type_name, true, false)
-				for node in found:
-					if node is Node and node.get_script() == STEAM_VENT_SCRIPT:
-						typed.append(node)
+			var found := root.find_children("", "Area3D", true, false)
+			for node in found:
+				if node is Node and node.get_script() == STEAM_VENT_SCRIPT:
+					typed.append(node)
 	return typed
