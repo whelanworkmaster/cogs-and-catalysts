@@ -3,38 +3,35 @@
 [ext_resource type="Script" path="res://scripts/actors/enemy.gd" id="1_1q8s0"]
 [ext_resource type="Script" path="res://scripts/ai/enemy_ai.gd" id="2_0g3w7"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_9g8r1"]
-size = Vector2(28, 28)
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(28, 28, 28)
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_elev_detector"]
-size = Vector2(22, 22)
-
-[sub_resource type="CircleShape2D" id="CircleShape2D_attack"]
+[sub_resource type="SphereShape3D" id="SphereShape3D_attack"]
 radius = 40.0
 
-[node name="Enemy" type="CharacterBody2D"]
+[node name="Enemy" type="CharacterBody3D"]
 script = ExtResource("1_1q8s0")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="VisualRoot" type="Node3D" parent="."]
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("RectangleShape2D_9g8r1")
+[node name="BodyBox" type="CSGBox3D" parent="VisualRoot"]
+size = Vector3(28, 28, 28)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, 0)
 
-[node name="ElevationDetector" type="Area2D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_body")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, 0)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="ElevationDetector"]
-shape = SubResource("RectangleShape2D_elev_detector")
+[node name="ElevationDetector" type="Area3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ElevationDetector"]
+shape = SubResource("BoxShape3D_body")
 
 [node name="AI" type="Node" parent="."]
 script = ExtResource("2_0g3w7")
 
-[node name="AttackArea" type="Area2D" parent="."]
+[node name="AttackArea" type="Area3D" parent="."]
 monitoring = true
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
-shape = SubResource("CircleShape2D_attack")
-
-[node name="NavigationAgent2D" type="NavigationAgent2D" parent="."]
-radius = 8.0
-path_desired_distance = 4.0
-target_desired_distance = 8.0
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AttackArea"]
+shape = SubResource("SphereShape3D_attack")

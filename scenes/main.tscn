@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://bcb5dy2tgvfdj" path="res://scenes/ui/combat_hud.tscn" id="3_2h1x5"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_over.tscn" id="6_game_over"]
 [ext_resource type="PackedScene" uid="uid://d1k6rj0x6c2mj" path="res://scenes/player.tscn" id="7_player"]
+[ext_resource type="PackedScene" uid="uid://c6d45ey1whev" path="res://scenes/enemy.tscn" id="8_enemy"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -40,6 +41,9 @@ size = Vector3(1200, 1, 840)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
 
 [node name="Player" parent="." instance=ExtResource("7_player")]
+
+[node name="Enemy" parent="." instance=ExtResource("8_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 100, 0, 100)
 
 [node name="CombatHUD" parent="." instance=ExtResource("3_2h1x5")]
 
