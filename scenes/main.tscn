@@ -40,7 +40,7 @@ shadow_enabled = true
 environment = SubResource("Environment_1")
 
 [node name="GroundPlane" type="CSGBox3D" parent="."]
-size = Vector3(1200, 1, 840)
+size = Vector3(4000, 1, 4000)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
 
 [node name="Player" parent="." instance=ExtResource("7_player")]
