@@ -1,4 +1,4 @@
-extends Area2D
+extends Area3D
 
 class_name SteamVent
 
@@ -7,12 +7,36 @@ class_name SteamVent
 @export var affect_player: bool = true
 @export var affect_enemies: bool = false
 @export var cooldown_seconds: float = 0.8
+@export var vent_size: Vector3 = Vector3(32, 4, 32)
+@export var vent_color: Color = Color(0.7, 0.9, 0.3, 0.7)
 
 var _last_trigger_time: Dictionary = {}
 
 func _ready() -> void:
+	add_to_group("steam_vent")
 	monitoring = true
 	body_entered.connect(_on_body_entered)
+	_build_visual()
+	_build_detection_shape()
+
+func _build_visual() -> void:
+	var mesh := CSGBox3D.new()
+	mesh.name = "VentMesh"
+	mesh.size = vent_size
+	mesh.transform.origin = Vector3(0, vent_size.y * 0.5, 0)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = vent_color
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mesh.material = mat
+	add_child(mesh)
+
+func _build_detection_shape() -> void:
+	var shape_node := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(vent_size.x, vent_size.y + 32.0, vent_size.z)
+	shape_node.shape = box
+	shape_node.transform.origin = Vector3(0, (vent_size.y + 32.0) * 0.5, 0)
+	add_child(shape_node)
 
 func _on_body_entered(body: Node) -> void:
 	if not _should_affect(body):

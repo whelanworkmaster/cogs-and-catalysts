@@ -235,8 +235,7 @@ func _drop_mutagenic_cell() -> void:
 		scene.add_child(cell)
 	else:
 		get_parent().add_child(cell)
-	# MutagenicCell is still Node2D until Phase 6 — assign XZ as 2D position
-	cell.global_position = Vector2(global_position.x, global_position.z)
+	cell.global_position = global_position
 
 func _apply_elevation_visuals() -> void:
 	global_position.y = current_elevation_height
