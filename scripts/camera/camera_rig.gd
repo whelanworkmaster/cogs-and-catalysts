@@ -7,7 +7,7 @@ class_name CameraRig
 @export var min_zoom: float = 5.0
 @export var max_zoom: float = 60.0
 @export var initial_zoom: float = 30.0
-@export var pitch_deg: float = -45.0
+@export var pitch_deg: float = -30.0
 @export var initial_yaw_deg: float = -30.0
 @export var follow_target: NodePath = ""
 @export var follow_smoothing: float = 8.0
@@ -60,9 +60,25 @@ func _update_camera_transform() -> void:
 		return
 	# Distance must scale with ortho size so the bottom of the view stays above ground
 	var distance := _zoom * 1.0
-	var offset := Vector3.ZERO
-	offset.x = distance * cos(_pitch) * sin(_yaw)
-	offset.y = distance * -sin(_pitch)
-	offset.z = distance * cos(_pitch) * cos(_yaw)
-	_camera.position = offset
-	_camera.look_at(Vector3.ZERO)
+
+	# Use spherical coordinates to position camera in orbit
+	# The pitch is locked at 45 degrees down, yaw rotates around
+	var pitch_from_horizontal := absf(_pitch)  # 45 degrees
+	var height := distance * sin(pitch_from_horizontal)
+	var radius := distance * cos(pitch_from_horizontal)
+
+	# Start behind the origin (positive Z), then rotate by yaw around Y axis
+	var base_position := Vector3(0, height, radius)
+	var camera_offset := base_position.rotated(Vector3.UP, _yaw)
+
+	_camera.position = camera_offset
+
+	# Manually construct camera rotation to avoid look_at issues
+	# Calculate direction from camera to target (forward)
+	var to_target := (Vector3.ZERO - camera_offset).normalized()
+	# Calculate right vector (perpendicular to forward and world up)
+	var camera_right := Vector3.UP.cross(to_target).normalized()
+	# Calculate up vector (perpendicular to forward and right, ensures no roll)
+	var camera_up := to_target.cross(camera_right).normalized()
+	# Construct basis (camera looks along -Z, so Z axis is opposite of forward)
+	_camera.basis = Basis(camera_right, camera_up, -to_target)
