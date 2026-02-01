@@ -40,10 +40,15 @@
 
 ### Player
 - CharacterBody3D with CSGBox3D visual (blue, 32x32x32).
-- Exploration: free movement on XZ plane, no AP cost.
-- Combat: AP-spending step movement with grid snapping and cooldown.
+- **Click-to-move** (XCOM/BG3 style): left-click a grid cell to pathfind and walk there via A*.
+  - Exploration: click-to-move with no AP cost, no path length limit.
+  - Combat: each cell costs AP; path is truncated to affordable length.
+  - Click on an enemy in combat to attack (if within attack range).
+  - Path preview line shown on hover (green line on grid overlay).
+  - Movement is animated cell-by-cell via tween.
 - AP resets at the start of the player's turn.
 - Stances (Neutral/Guard/Aggress/Evade), Disengage toggle, reaction attacks on leaving threat range.
+- Attack: F key for nearest target, or click enemy directly.
 - Hit feedback (flash + squash/stretch) and floating damage numbers via `camera.unproject_position()`.
 - Death animation and Game Over overlay with retry.
 - Mutagenic cell pickup.
@@ -141,7 +146,6 @@
 
 ## Notes
 - All distance constants are in pixel scale (32, 40, 240, 750). Works but the world is very large. Scale normalization is a future pass.
-- Arrow key movement is world-relative (not camera-relative). Camera-relative input is a future enhancement.
-- Combat movement uses a cooldown to prevent AP burn when holding a key.
+- Movement is click-to-move (left-click on grid). WASD/arrow keys no longer used for movement.
 - The player is in the `player` group for AI targeting.
 - Procgen runs after scene load (deferred) to ensure obstacle groups are populated.

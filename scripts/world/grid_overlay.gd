@@ -1,8 +1,10 @@
 extends MeshInstance3D
 
 @export var grid_color: Color = Color(0.2, 0.6, 0.8, 0.25)
+@export var path_color: Color = Color(0.3, 1.0, 0.4, 0.6)
 
 var _obstacle_rects: Array[Rect2] = []
+var _path_preview_mesh: MeshInstance3D
 
 func _ready() -> void:
 	var mat := StandardMaterial3D.new()
@@ -11,6 +13,16 @@ func _ready() -> void:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.no_depth_test = true
 	material_override = mat
+	# Create a child MeshInstance3D for the path preview line
+	_path_preview_mesh = MeshInstance3D.new()
+	_path_preview_mesh.name = "PathPreview"
+	var path_mat := StandardMaterial3D.new()
+	path_mat.albedo_color = path_color
+	path_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	path_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	path_mat.no_depth_test = true
+	_path_preview_mesh.material_override = path_mat
+	add_child(_path_preview_mesh)
 	_cache_obstacles()
 	_rebuild_mesh()
 
@@ -125,3 +137,22 @@ func _get_nav_obstacles() -> Array[Node]:
 				if node is Node and node.has_node("ElevationBlocker"):
 					typed.append(node)
 	return typed
+
+func set_path_preview(path: PackedVector3Array) -> void:
+	if not _path_preview_mesh:
+		return
+	if path.size() < 2:
+		clear_path_preview()
+		return
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	var y_offset := 0.15
+	for i in range(path.size() - 1):
+		im.surface_add_vertex(Vector3(path[i].x, y_offset, path[i].z))
+		im.surface_add_vertex(Vector3(path[i + 1].x, y_offset, path[i + 1].z))
+	im.surface_end()
+	_path_preview_mesh.mesh = im
+
+func clear_path_preview() -> void:
+	if _path_preview_mesh:
+		_path_preview_mesh.mesh = null
