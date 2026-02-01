@@ -41,6 +41,8 @@ var current_elevation_height: float = 0.0
 @onready var attack_area: Area3D = $AttackArea
 var _visual_root: Node3D
 var _body_mesh: CSGBox3D
+var _facing_indicator: CSGPolygon3D
+var _facing_direction: Vector3 = Vector3.FORWARD
 
 func _ready():
 	print("Player initialized with ", current_ap, " AP")
@@ -63,6 +65,28 @@ func _setup_visual() -> void:
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.2, 0.45, 1.0)
 		_body_mesh.material = mat
+	_create_facing_indicator()
+
+func _create_facing_indicator() -> void:
+	if not _visual_root:
+		return
+	_facing_indicator = CSGPolygon3D.new()
+	_facing_indicator.name = "FacingIndicator"
+	# Create arrow shape (triangle pointing forward)
+	var arrow_points := PackedVector2Array([
+		Vector2(0, 16),      # tip
+		Vector2(-8, 0),      # left base
+		Vector2(8, 0)        # right base
+	])
+	_facing_indicator.polygon = arrow_points
+	_facing_indicator.depth = 4.0
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.3, 0.6, 1.0)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_facing_indicator.material = mat
+	_visual_root.add_child(_facing_indicator)
+	# Update position and rotation immediately
+	_update_facing_indicator()
 
 func _physics_process(delta):
 	if _is_dead:
@@ -107,6 +131,8 @@ func handle_movement():
 
 	if input_direction != Vector3.ZERO:
 		input_direction = input_direction.normalized()
+		_facing_direction = input_direction
+		_update_facing_indicator()
 
 		var requires_ap := CombatManager and CombatManager.active_combat
 		if requires_ap:
@@ -269,6 +295,32 @@ func _tick_detection() -> void:
 		CombatManager.tick_detection(1)
 
 func _ensure_input_actions() -> void:
+	# Add WASD to movement actions
+	if InputMap.has_action("ui_up"):
+		var w_key := InputEventKey.new()
+		w_key.keycode = KEY_W
+		w_key.physical_keycode = KEY_W
+		if not InputMap.action_has_event("ui_up", w_key):
+			InputMap.action_add_event("ui_up", w_key)
+	if InputMap.has_action("ui_down"):
+		var s_key := InputEventKey.new()
+		s_key.keycode = KEY_S
+		s_key.physical_keycode = KEY_S
+		if not InputMap.action_has_event("ui_down", s_key):
+			InputMap.action_add_event("ui_down", s_key)
+	if InputMap.has_action("ui_left"):
+		var a_key := InputEventKey.new()
+		a_key.keycode = KEY_A
+		a_key.physical_keycode = KEY_A
+		if not InputMap.action_has_event("ui_left", a_key):
+			InputMap.action_add_event("ui_left", a_key)
+	if InputMap.has_action("ui_right"):
+		var d_key := InputEventKey.new()
+		d_key.keycode = KEY_D
+		d_key.physical_keycode = KEY_D
+		if not InputMap.action_has_event("ui_right", d_key):
+			InputMap.action_add_event("ui_right", d_key)
+
 	if not InputMap.has_action("attack"):
 		InputMap.add_action("attack")
 	var attack_key_event := InputEventKey.new()
@@ -385,6 +437,16 @@ func _get_damage_reduction() -> int:
 
 func _apply_elevation_visuals() -> void:
 	global_position.y = current_elevation_height
+
+func _update_facing_indicator() -> void:
+	if not _facing_indicator:
+		return
+	# Calculate angle from facing direction and update rotation while preserving X tilt
+	var angle := atan2(_facing_direction.x, _facing_direction.z)
+	_facing_indicator.rotation = Vector3(-PI/2, angle, 0)
+	# Position the arrow in front of the character
+	var offset := _facing_direction * 20.0  # 20 units in front
+	_facing_indicator.position = Vector3(offset.x, 2, offset.z)
 
 func handle_stance_input() -> void:
 	if not CombatManager or not CombatManager.active_combat:

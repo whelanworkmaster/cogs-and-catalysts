@@ -23,6 +23,8 @@ var current_elevation_height: float = 0.0
 var _visual_root: Node3D
 var _body_mesh: CSGBox3D
 var _hit_tween: Tween
+var _facing_indicator: CSGPolygon3D
+var _facing_direction: Vector3 = Vector3.FORWARD
 
 func _ready() -> void:
 	current_hp = max_hp
@@ -43,6 +45,28 @@ func _setup_visual() -> void:
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.9, 0.2, 0.2)
 		_body_mesh.material = mat
+	_create_facing_indicator()
+
+func _create_facing_indicator() -> void:
+	if not _visual_root:
+		return
+	_facing_indicator = CSGPolygon3D.new()
+	_facing_indicator.name = "FacingIndicator"
+	# Create arrow shape (triangle pointing forward)
+	var arrow_points := PackedVector2Array([
+		Vector2(0, 14),      # tip
+		Vector2(-7, 0),      # left base
+		Vector2(7, 0)        # right base
+	])
+	_facing_indicator.polygon = arrow_points
+	_facing_indicator.depth = 4.0
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.3, 0.3)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_facing_indicator.material = mat
+	_visual_root.add_child(_facing_indicator)
+	# Update position and rotation immediately
+	_update_facing_indicator()
 
 func _on_elevation_area_entered(area: Area3D) -> void:
 	if "elevation_level" in area:
@@ -70,6 +94,7 @@ func move_towards(target_position, distance: float = 0.0) -> void:
 	else:
 		return
 
+	var old_pos := global_position
 	if world and world.has_method("get_astar_path_3d"):
 		var path: PackedVector3Array = world.get_astar_path_3d(global_position, target_3d)
 		if path.size() > 1:
@@ -78,6 +103,7 @@ func move_towards(target_position, distance: float = 0.0) -> void:
 				next_pos = world.snap_to_grid(next_pos)
 			next_pos.y = global_position.y
 			global_position = next_pos
+			_update_facing_from_movement(old_pos, global_position)
 			return
 	# Fallback to 2D path
 	if world and world.has_method("get_astar_path"):
@@ -89,6 +115,7 @@ func move_towards(target_position, distance: float = 0.0) -> void:
 			if world.has_method("snap_to_grid"):
 				next_pos_2d = world.snap_to_grid(next_pos_2d)
 			global_position = Vector3(next_pos_2d.x, global_position.y, next_pos_2d.y)
+			_update_facing_from_movement(old_pos, global_position)
 
 func attack(target: Node) -> void:
 	if not target:
@@ -268,6 +295,22 @@ func _create_threat_visual() -> void:
 func _on_turn_started(actor: Node) -> void:
 	if actor == self:
 		reset_ap()
+
+func _update_facing_from_movement(old_pos: Vector3, new_pos: Vector3) -> void:
+	var direction := new_pos - old_pos
+	if direction.length_squared() > 0.001:
+		_facing_direction = direction.normalized()
+		_update_facing_indicator()
+
+func _update_facing_indicator() -> void:
+	if not _facing_indicator:
+		return
+	# Calculate angle from facing direction and update rotation while preserving X tilt
+	var angle := atan2(_facing_direction.x, _facing_direction.z)
+	_facing_indicator.rotation = Vector3(-PI/2, angle, 0)
+	# Position the arrow in front of the character
+	var offset := _facing_direction * 18.0  # 18 units in front
+	_facing_indicator.position = Vector3(offset.x, 2, offset.z)
 
 ## Returns XZ-plane distance from this node to the given position (ignores Y).
 func _xz_distance_to(target: Vector3) -> float:
