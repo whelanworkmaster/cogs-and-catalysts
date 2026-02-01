@@ -579,7 +579,14 @@ func _get_obstacle_rect(zone: Node) -> Rect2:
 	return _get_obstacle_rect_from_node(zone)
 
 func _get_obstacle_rect_from_node(zone: Node) -> Rect2:
-	# Try 3D shape first
+	# Read directly from node properties (reliable after procgen moves)
+	if zone is Node3D and "building_size" in zone:
+		var node := zone as Node3D
+		var center := Vector2(node.global_position.x, node.global_position.z)
+		var bs: Vector3 = zone.building_size
+		var size := Vector2(bs.x, bs.z)
+		return Rect2(center - size * 0.5, size)
+	# Fallback: read from collision shape child
 	var shape_3d := zone.get_node_or_null("ElevationBlocker/CollisionShape3D")
 	if shape_3d and shape_3d is CollisionShape3D:
 		var box_shape := shape_3d.shape as BoxShape3D

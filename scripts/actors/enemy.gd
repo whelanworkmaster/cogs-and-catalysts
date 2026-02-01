@@ -76,14 +76,8 @@ func move_towards(target_position, distance: float = 0.0) -> void:
 			var next_pos: Vector3 = path[1]
 			if world.has_method("snap_to_grid"):
 				next_pos = world.snap_to_grid(next_pos)
-			var to_next := next_pos - global_position
-			to_next.y = 0
-			if to_next == Vector3.ZERO:
-				return
-			var motion: Vector3 = to_next.normalized() * min(step, to_next.length())
-			var collision: KinematicCollision3D = move_and_collide(motion)
-			if collision == null and world.has_method("snap_to_grid"):
-				global_position = world.snap_to_grid(global_position)
+			next_pos.y = global_position.y
+			global_position = next_pos
 			return
 	# Fallback to 2D path
 	if world and world.has_method("get_astar_path"):
@@ -94,15 +88,7 @@ func move_towards(target_position, distance: float = 0.0) -> void:
 			var next_pos_2d: Vector2 = path[1]
 			if world.has_method("snap_to_grid"):
 				next_pos_2d = world.snap_to_grid(next_pos_2d)
-			var next_pos_3d := Vector3(next_pos_2d.x, global_position.y, next_pos_2d.y)
-			var to_next := next_pos_3d - global_position
-			to_next.y = 0
-			if to_next == Vector3.ZERO:
-				return
-			var motion: Vector3 = to_next.normalized() * min(step, to_next.length())
-			var collision: KinematicCollision3D = move_and_collide(motion)
-			if collision == null and world.has_method("snap_to_grid"):
-				global_position = world.snap_to_grid(global_position)
+			global_position = Vector3(next_pos_2d.x, global_position.y, next_pos_2d.y)
 
 func attack(target: Node) -> void:
 	if not target:

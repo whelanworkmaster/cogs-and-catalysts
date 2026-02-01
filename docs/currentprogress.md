@@ -51,8 +51,8 @@
 ### Enemy
 - CharacterBody3D with CSGBox3D visual (red, 28x28x28).
 - AI state scaffold (idle -> seek) with AP-based movement.
-- A* grid pathfinding around blockers (AStarGrid2D internally, Vector3 wrappers externally).
-- Ranged attacks use 3D raycast line-of-sight checks (PhysicsRayQueryParameters3D).
+- A* grid pathfinding around buildings (AStarGrid2D internally, Vector3 wrappers externally). Enemy movement uses direct grid-cell positioning (no physics collision).
+- Ranged attacks use geometric line-of-sight checks against building footprints. Enemies will not fire if a building blocks the shot.
 - Ranged shot visual: ImmediateMesh line with fade-out tween.
 - Death drops mutagenic cell.
 - Threat ring visual (ImmediateMesh circle on ground).
