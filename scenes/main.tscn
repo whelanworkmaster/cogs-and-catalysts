@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" uid="uid://c6d45ey1whev" path="res://scenes/enemy.tscn" id="8_enemy"]
 [ext_resource type="Script" path="res://scripts/world/elevation_area.gd" id="9_elev"]
 [ext_resource type="Script" path="res://scripts/world/steam_vent.gd" id="10_vent"]
+[ext_resource type="Script" path="res://scripts/world/grid_overlay.gd" id="11_grid"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -60,6 +61,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 200, 0, 50)
 elevation_level = 1
 elevation_height = 32.0
 building_size = Vector3(96, 32, 128)
+
+[node name="GridOverlay" type="MeshInstance3D" parent="."]
+script = ExtResource("11_grid")
 
 [node name="SteamVent1" type="Area3D" parent="."]
 script = ExtResource("10_vent")

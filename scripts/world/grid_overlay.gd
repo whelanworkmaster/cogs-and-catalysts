@@ -1,20 +1,24 @@
-extends Node2D
+extends MeshInstance3D
 
 @export var grid_color: Color = Color(0.2, 0.6, 0.8, 0.25)
-@export var line_width: float = 1.0
 
 var _obstacle_rects: Array[Rect2] = []
 
 func _ready() -> void:
-	z_index = -10
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = grid_color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = true
+	material_override = mat
 	_cache_obstacles()
-	queue_redraw()
+	_rebuild_mesh()
 
 func refresh() -> void:
 	_cache_obstacles()
-	queue_redraw()
+	_rebuild_mesh()
 
-func _draw() -> void:
+func _rebuild_mesh() -> void:
 	var bounds: Vector2 = _get_nav_bounds()
 	var cell: Vector2 = _get_cell_size()
 	var origin: Vector2 = _get_grid_origin()
@@ -25,13 +29,31 @@ func _draw() -> void:
 		origin = Vector2(-half.x, -half.y)
 	var cols: int = int(ceilf(bounds.x / cell.x))
 	var rows: int = int(ceilf(bounds.y / cell.y))
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	var y_offset := 0.05
 	for y in range(rows):
 		for x in range(cols):
 			var center := origin + Vector2((x + 0.5) * cell.x, (y + 0.5) * cell.y)
 			if _point_in_obstacles(center):
 				continue
-			var rect := Rect2(center - cell * 0.5, cell)
-			draw_rect(rect, grid_color, false, line_width)
+			var hx := cell.x * 0.5
+			var hz := cell.y * 0.5
+			# Four edges of the cell as line segments on XZ plane
+			# Bottom edge (min Z)
+			im.surface_add_vertex(Vector3(center.x - hx, y_offset, center.y - hz))
+			im.surface_add_vertex(Vector3(center.x + hx, y_offset, center.y - hz))
+			# Right edge (max X)
+			im.surface_add_vertex(Vector3(center.x + hx, y_offset, center.y - hz))
+			im.surface_add_vertex(Vector3(center.x + hx, y_offset, center.y + hz))
+			# Top edge (max Z)
+			im.surface_add_vertex(Vector3(center.x + hx, y_offset, center.y + hz))
+			im.surface_add_vertex(Vector3(center.x - hx, y_offset, center.y + hz))
+			# Left edge (min X)
+			im.surface_add_vertex(Vector3(center.x - hx, y_offset, center.y + hz))
+			im.surface_add_vertex(Vector3(center.x - hx, y_offset, center.y - hz))
+	im.surface_end()
+	mesh = im
 
 func _get_nav_bounds() -> Vector2:
 	var parent_main := get_parent()
@@ -61,10 +83,7 @@ func _cache_obstacles() -> void:
 	_obstacle_rects.clear()
 	var obstacles: Array[Node] = _get_nav_obstacles()
 	for obstacle in obstacles:
-		var zone := obstacle as Node2D
-		if not zone:
-			continue
-		var rect := _get_obstacle_rect(zone)
+		var rect := _get_obstacle_rect(obstacle)
 		if rect.size != Vector2.ZERO:
 			_obstacle_rects.append(rect)
 
@@ -74,15 +93,15 @@ func _point_in_obstacles(pos: Vector2) -> bool:
 			return true
 	return false
 
-func _get_obstacle_rect(zone: Node2D) -> Rect2:
-	var shape_node := zone.get_node_or_null("ElevationBlocker/CollisionShape2D")
-	if shape_node and shape_node is CollisionShape2D:
-		var rect_shape := shape_node.shape as RectangleShape2D
-		if rect_shape:
-			var world_center: Vector2 = shape_node.global_transform.origin
-			var scale: Vector2 = shape_node.global_transform.get_scale().abs()
-			var size: Vector2 = rect_shape.size * scale
-			return Rect2(world_center - size * 0.5, size)
+func _get_obstacle_rect(zone: Node) -> Rect2:
+	# Try 3D shape
+	var shape_3d := zone.get_node_or_null("ElevationBlocker/CollisionShape3D")
+	if shape_3d and shape_3d is CollisionShape3D:
+		var box_shape := shape_3d.shape as BoxShape3D
+		if box_shape:
+			var world_pos: Vector3 = shape_3d.global_transform.origin
+			var xz_size := Vector2(box_shape.size.x, box_shape.size.z)
+			return Rect2(Vector2(world_pos.x, world_pos.z) - xz_size * 0.5, xz_size)
 	return Rect2()
 
 func _get_nav_obstacles() -> Array[Node]:
@@ -94,8 +113,9 @@ func _get_nav_obstacles() -> Array[Node]:
 	if typed.is_empty():
 		var root := get_tree().current_scene
 		if root:
-			var found := root.find_children("", "Area2D", true, false)
-			for node in found:
-				if node is Node and node.has_node("ElevationBlocker"):
-					typed.append(node)
+			for type_name in ["Area3D", "Area2D"]:
+				var found := root.find_children("", type_name, true, false)
+				for node in found:
+					if node is Node and node.has_node("ElevationBlocker"):
+						typed.append(node)
 	return typed

@@ -4,6 +4,7 @@ class_name Enemy
 
 const DamagePopup = preload("res://scripts/ui/damage_popup.gd")
 const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
+const EnemyThreatVisual = preload("res://scripts/ui/enemy_threat_visual.gd")
 
 @export var max_hp: int = 8
 @export var max_ap: int = 10
@@ -31,6 +32,7 @@ func _ready() -> void:
 	elevation_detector.area_entered.connect(_on_elevation_area_entered)
 	elevation_detector.area_exited.connect(_on_elevation_area_exited)
 	_setup_visual()
+	_create_threat_visual()
 	if CombatManager:
 		CombatManager.turn_started.connect(_on_turn_started)
 
@@ -277,6 +279,14 @@ func _spawn_damage_popup(amount: int, color: Color) -> void:
 	popup.color = color
 	popup.global_position = screen_pos
 	scene.add_child(popup)
+
+func _create_threat_visual() -> void:
+	if has_node("ThreatVisual"):
+		return
+	var ring := MeshInstance3D.new()
+	ring.name = "ThreatVisual"
+	ring.set_script(EnemyThreatVisual)
+	add_child(ring)
 
 func _on_turn_started(actor: Node) -> void:
 	if actor == self:
