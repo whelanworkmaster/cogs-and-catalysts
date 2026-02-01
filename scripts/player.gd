@@ -36,6 +36,7 @@ var disengage_active: bool = false
 var _is_moving: bool = false
 var _move_tween: Tween
 var _preview_path: PackedVector3Array = PackedVector3Array()
+var _ap_cost_label: Label
 
 # Elevation tracking
 var current_elevation: int = 0
@@ -60,6 +61,23 @@ func _ready():
 		CombatManager.combat_started.connect(_on_combat_started)
 		CombatManager.combat_ended.connect(_on_combat_ended)
 	_setup_visual()
+	_create_ap_cost_label()
+
+func _create_ap_cost_label() -> void:
+	_ap_cost_label = Label.new()
+	_ap_cost_label.name = "APCostLabel"
+	_ap_cost_label.add_theme_font_size_override("font_size", 16)
+	_ap_cost_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	_ap_cost_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	_ap_cost_label.add_theme_constant_override("shadow_offset_x", 1)
+	_ap_cost_label.add_theme_constant_override("shadow_offset_y", 1)
+	_ap_cost_label.visible = false
+	# Add to the scene tree's CanvasLayer so it renders on screen
+	var canvas := CanvasLayer.new()
+	canvas.name = "APCostCanvas"
+	canvas.layer = 10
+	add_child(canvas)
+	canvas.add_child(_ap_cost_label)
 
 func _setup_visual() -> void:
 	_visual_root = $VisualRoot if has_node("VisualRoot") else null
@@ -221,9 +239,26 @@ func _update_path_preview(screen_pos: Vector2) -> void:
 	var grid := world.get_node_or_null("GridOverlay")
 	if grid and grid.has_method("set_path_preview"):
 		grid.set_path_preview(path)
+	# Show AP cost at the end of the path
+	if in_combat and _ap_cost_label:
+		var cells := path.size() - 1  # exclude starting cell
+		var ap_cost_per_cell := _get_ap_cost("move")
+		var total_cost := cells * ap_cost_per_cell
+		_ap_cost_label.text = "%d AP" % total_cost
+		if total_cost > current_ap:
+			_ap_cost_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+		else:
+			_ap_cost_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+		# Position near cursor with a small offset
+		_ap_cost_label.position = screen_pos + Vector2(16, -24)
+		_ap_cost_label.visible = true
+	elif _ap_cost_label:
+		_ap_cost_label.visible = false
 
 func _clear_path_preview() -> void:
 	_preview_path = PackedVector3Array()
+	if _ap_cost_label:
+		_ap_cost_label.visible = false
 	var world := get_tree().current_scene
 	if world:
 		var grid := world.get_node_or_null("GridOverlay")
