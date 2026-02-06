@@ -25,10 +25,20 @@ Strategic change:
   - Toxicity Load thresholds apply movement AP penalty and toxic burst damage/reset.
 - HUD now shows upcoming pressure effects for Alert Level and Toxicity Load.
 
+### Squad Foundation (First Pass Implemented)
+- Added `SquadManager` singleton to track registered Vessels and living squad members.
+- World setup now supports configurable squad size and currently spawns a 2-Vessel baseline.
+- Combat turn queue and actor removal logic now support multiple friendly Vessels.
+- Enemy AI target selection now chooses from living squad members instead of a single hardcoded player target.
+- Added active Vessel switching during player turns (`Tab`, fallback `C`).
+- Added camera follow handoff when switching active Vessel.
+- Fixed same-frame double switch input bounce using a combat-frame input guard.
+- Fixed movement path preview conflicts so inactive Vessels no longer clear active preview lines.
+
 ### Encounter Systems (Working / Partial)
 - Procedural combat space with buildings and blockers.
 - Hazard actors (steam vents) and resource pickups (mutagenic cells).
-- Pressure HUD scaffolding exists (Alert Level/Toxicity Load).
+- Pressure HUD exists as a compact bottom-docked two-line overlay.
 - Reinforcement and mission-failure consequences are not fully defined yet.
 
 ### Architecture

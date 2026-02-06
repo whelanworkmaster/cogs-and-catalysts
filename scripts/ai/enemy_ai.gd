@@ -49,4 +49,39 @@ func has_player() -> bool:
 	return get_player() != null
 
 func get_player() -> Node:
-	return get_tree().get_first_node_in_group(target_group)
+	var best_target: Node = null
+	var best_distance := INF
+	var owner_pos := Vector3.ZERO
+	if _owner and _owner is Node3D:
+		owner_pos = (_owner as Node3D).global_position
+	var candidates := get_players()
+	for candidate in candidates:
+		if candidate == null:
+			continue
+		if not (candidate is Node3D):
+			continue
+		var distance := owner_pos.distance_to((candidate as Node3D).global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best_target = candidate
+	return best_target
+
+func get_players() -> Array:
+	var squad_manager := _get_squad_manager()
+	if squad_manager:
+		return squad_manager.get_living_vessels()
+	var players: Array = []
+	var group_nodes := get_tree().get_nodes_in_group(target_group)
+	for node in group_nodes:
+		if node == null:
+			continue
+		if node.has_method("get_current_hp") and node.get_current_hp() <= 0:
+			continue
+		players.append(node)
+	return players
+
+func _get_squad_manager() -> Node:
+	var tree := get_tree()
+	if not tree:
+		return null
+	return tree.root.get_node_or_null("SquadManager")

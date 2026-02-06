@@ -210,6 +210,8 @@ func get_attack_targets() -> Array:
 	var targets: Array = []
 	for body in bodies:
 		if body != null and body.is_in_group("player"):
+			if body.has_method("get_current_hp") and body.get_current_hp() <= 0:
+				continue
 			if body.has_method("get_elevation_level") and body.get_elevation_level() != current_elevation:
 				continue
 			targets.append(body)

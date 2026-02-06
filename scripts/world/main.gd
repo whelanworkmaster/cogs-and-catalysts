@@ -2,6 +2,7 @@ extends Node3D
 
 @export var auto_start_combat: bool = true
 @export var use_procgen: bool = true
+@export var squad_size: int = 2
 @export var enemy_count: int = 2
 @export var building_count_min: int = 4
 @export var building_count_max: int = 6
@@ -17,6 +18,7 @@ extends Node3D
 @export var min_enemy_spacing: float = 120.0
 @export var min_player_enemy_spacing: float = 180.0
 @export var min_player_obstacle_spacing: float = 80.0
+@export var min_player_spacing: float = 96.0
 @export var obstacle_spacing: float = 120.0
 @export var procgen_seed: int = 0
 @export var procgen_margin: Vector2 = Vector2(80, 80)
@@ -31,6 +33,7 @@ var _base_move_ap_cost: int = 1
 var _toxicity_penalty_active: bool = false
 
 const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
+const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const STEAM_VENT_SCRIPT := preload("res://scripts/world/steam_vent.gd")
 const INVALID_POS := Vector2.INF
 const INVALID_POS_3D := Vector3.INF
@@ -50,6 +53,7 @@ func _ready() -> void:
 	call_deferred("_post_scene_setup")
 
 func _post_scene_setup() -> void:
+	_ensure_squad_size()
 	if use_procgen:
 		_setup_procgen()
 	_build_navigation()
@@ -66,13 +70,24 @@ func _start_combat() -> void:
 	if not CombatManager or CombatManager.active_combat:
 		return
 	var actors: Array = []
-	var player := get_tree().get_first_node_in_group("player")
-	if player:
+	var combat_players := _get_combat_players()
+	for player in combat_players:
+		if player == null:
+			continue
+		if player.has_method("get_current_hp") and player.get_current_hp() <= 0:
+			continue
 		actors.append(player)
 	var enemies := get_tree().get_nodes_in_group("enemy")
 	for enemy in enemies:
-		if enemy != player:
-			actors.append(enemy)
+		if enemy == null:
+			continue
+		if enemy.has_method("get_current_hp") and enemy.get_current_hp() <= 0:
+			continue
+		actors.append(enemy)
+	print("Combat setup: players=%s enemies=%s total_actors=%s" % [combat_players.size(), enemies.size(), actors.size()])
+	for actor in actors:
+		if actor:
+			print(" - actor: %s" % actor.name)
 	if not actors.is_empty():
 		CombatManager.start_combat(actors)
 
@@ -245,9 +260,69 @@ func _setup_procgen() -> void:
 		print("Procgen: seed=", procgen_seed, " margin=", procgen_margin, " buildings=", building_count_min, "-", building_count_max, " vents=", vent_count_min, "-", vent_count_max, " enemies=", enemy_count)
 	_randomize_obstacles()
 	_refresh_grid_overlay()
-	_position_player()
+	_position_players()
 	_spawn_enemies()
 	_randomize_steam_vents()
+
+func _ensure_squad_size() -> void:
+	var desired := maxi(squad_size, 1)
+	var players := _get_players()
+	if players.is_empty():
+		var primary := PLAYER_SCENE.instantiate()
+		primary.name = "Player"
+		add_child(primary)
+		players = _get_players()
+	while players.size() < desired:
+		var extra := PLAYER_SCENE.instantiate()
+		extra.name = "Player%s" % (players.size() + 1)
+		add_child(extra)
+		players = _get_players()
+	while players.size() > desired:
+		var extra_player: Node = players[players.size() - 1] as Node
+		if extra_player:
+			extra_player.queue_free()
+		players = _get_players()
+
+func _get_players() -> Array:
+	var players: Array = []
+	var nodes := get_tree().get_nodes_in_group("player")
+	for node in nodes:
+		if node == null:
+			continue
+		if not is_instance_valid(node):
+			continue
+		if node.is_queued_for_deletion():
+			continue
+		players.append(node)
+	return players
+
+func _get_primary_player_pos() -> Vector2:
+	var squad_manager := _get_squad_manager()
+	if squad_manager:
+		var active: Node = squad_manager.get_active_vessel() as Node
+		if active is Node3D:
+			var pos3: Vector3 = (active as Node3D).global_position
+			return Vector2(pos3.x, pos3.z)
+	var players := _get_players()
+	for player in players:
+		if player is Node3D:
+			var p3: Vector3 = (player as Node3D).global_position
+			return Vector2(p3.x, p3.z)
+	return INVALID_POS
+
+func _get_squad_manager() -> Node:
+	var tree := get_tree()
+	if not tree:
+		return null
+	return tree.root.get_node_or_null("SquadManager")
+
+func _get_combat_players() -> Array:
+	var squad_manager := _get_squad_manager()
+	if squad_manager:
+		var living: Array = squad_manager.get_living_vessels()
+		if not living.is_empty():
+			return living
+	return _get_players()
 
 func _seed_rng() -> void:
 	if procgen_seed != 0:
@@ -351,11 +426,7 @@ func _randomize_steam_vents() -> void:
 				add_child(clone)
 		vents = _get_steam_vents()
 	var avoid_points: Array[Vector2] = []
-	var player_pos: Vector2 = INVALID_POS
-	var player := get_tree().get_first_node_in_group("player")
-	if player is Node3D:
-		var p3: Vector3 = (player as Node3D).global_position
-		player_pos = Vector2(p3.x, p3.z)
+	var player_pos: Vector2 = _get_primary_player_pos()
 	var enemies := get_tree().get_nodes_in_group("enemy")
 	for enemy in enemies:
 		if enemy is Node3D:
@@ -386,31 +457,36 @@ func _spawn_enemies() -> void:
 			extra.queue_free()
 	var enemies := get_tree().get_nodes_in_group("enemy")
 	var placed: Array[Vector2] = []
-	var player_pos: Vector2 = INVALID_POS
-	var player := get_tree().get_first_node_in_group("player")
-	if player is Node3D:
-		var p3: Vector3 = (player as Node3D).global_position
-		player_pos = Vector2(p3.x, p3.z)
+	var player_positions: Array[Vector2] = []
+	for player in _get_players():
+		if player is Node3D:
+			var p3: Vector3 = (player as Node3D).global_position
+			player_positions.append(Vector2(p3.x, p3.z))
 	for enemy in enemies:
 		var node := enemy as Node3D
 		if not node:
 			continue
 		var avoid: Array[Vector2] = placed.duplicate()
-		if _is_valid_position(player_pos):
-			avoid.append(player_pos)
+		for player_pos in player_positions:
+			if _is_valid_position(player_pos):
+				avoid.append(player_pos)
 		var pos: Vector2 = _pick_position(avoid, min_enemy_spacing, min_player_obstacle_spacing)
 		if _is_valid_position(pos):
 			node.global_position = Vector3(pos.x, 0, pos.y)
 			placed.append(pos)
 
-func _position_player() -> void:
-	var player := get_tree().get_first_node_in_group("player")
-	if not player:
+func _position_players() -> void:
+	var players := _get_players()
+	if players.is_empty():
 		return
-	var pos: Vector2 = _pick_position([], 0.0, min_player_obstacle_spacing)
-	if _is_valid_position(pos):
-		if player is Node3D:
+	var placed: Array[Vector2] = []
+	for player in players:
+		if not (player is Node3D):
+			continue
+		var pos: Vector2 = _pick_position(placed, min_player_spacing, min_player_obstacle_spacing)
+		if _is_valid_position(pos):
 			(player as Node3D).global_position = Vector3(pos.x, 0, pos.y)
+			placed.append(pos)
 
 func _try_place_rect(size: Vector2, placed_rects: Array[Rect2]) -> Vector2:
 	var attempts: int = maxi(procgen_attempts, 10)

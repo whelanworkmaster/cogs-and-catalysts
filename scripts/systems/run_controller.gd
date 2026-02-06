@@ -62,11 +62,26 @@ func _set_state(new_state: int) -> void:
 func _on_combat_ended() -> void:
 	if current_state != RunState.ENCOUNTER:
 		return
-	var player := get_tree().get_first_node_in_group("player")
-	var player_alive := true
-	if player and player.has_method("get_current_hp"):
-		player_alive = player.get_current_hp() > 0
-	if not player_alive:
+	if _living_player_count() == 0:
 		complete_run(false, "Squad eliminated")
 		return
 	begin_extraction()
+
+func _living_player_count() -> int:
+	var squad_manager := _get_squad_manager()
+	if squad_manager:
+		return squad_manager.get_living_vessels().size()
+	var count := 0
+	for player in get_tree().get_nodes_in_group("player"):
+		if player == null:
+			continue
+		if player.has_method("get_current_hp") and player.get_current_hp() <= 0:
+			continue
+		count += 1
+	return count
+
+func _get_squad_manager() -> Node:
+	var tree := get_tree()
+	if not tree:
+		return null
+	return tree.root.get_node_or_null("SquadManager")

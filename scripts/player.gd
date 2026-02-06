@@ -55,6 +55,9 @@ func _ready():
 	print("Player initialized with ", current_ap, " AP")
 	current_hp = max_hp
 	add_to_group("player")
+	var squad_manager := _get_squad_manager()
+	if squad_manager:
+		squad_manager.register_vessel(self)
 	_ensure_input_actions()
 	elevation_detector.area_entered.connect(_on_elevation_area_entered)
 	elevation_detector.area_exited.connect(_on_elevation_area_exited)
@@ -122,6 +125,9 @@ func _physics_process(_delta):
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _is_dead:
+		return
+	var in_combat := CombatManager and CombatManager.active_combat
+	if in_combat and CombatManager.get_current_actor() != self:
 		return
 	if event is InputEventMouseMotion:
 		_update_hover_preview(event.position)
@@ -450,6 +456,12 @@ func handle_turn_input():
 		return
 	if CombatManager.get_current_actor() != self:
 		return
+	if Input.is_action_just_pressed("next_vessel"):
+		if CombatManager and not CombatManager.can_process_actor_switch_input():
+			return
+		print("Switch input detected on ", name)
+		_switch_to_next_vessel()
+		return
 	if Input.is_action_just_pressed("end_turn") or Input.is_action_just_pressed("ui_accept"):
 		CombatManager.end_turn()
 
@@ -602,10 +614,24 @@ func _die() -> void:
 	if _move_tween and _move_tween.is_running():
 		_move_tween.kill()
 	_is_moving = false
+	var squad_manager := _get_squad_manager()
+	if squad_manager:
+		squad_manager.unregister_vessel(self)
 	if CombatManager:
-		CombatManager.end_combat()
+		CombatManager.remove_actor(self)
 	_play_death_effect()
-	_show_game_over()
+	var has_living_vessel := false
+	if squad_manager:
+		has_living_vessel = not squad_manager.get_living_vessels().is_empty()
+	else:
+		for unit in get_tree().get_nodes_in_group("player"):
+			if unit == self:
+				continue
+			if unit.has_method("get_current_hp") and unit.get_current_hp() > 0:
+				has_living_vessel = true
+				break
+	if not has_living_vessel:
+		_show_game_over()
 
 func _tick_alert_level() -> void:
 	if CombatManager:
@@ -645,12 +671,28 @@ func _ensure_input_actions() -> void:
 	ranged_event.physical_keycode = KEY_R
 	if not InputMap.action_has_event("ranged_attack", ranged_event):
 		InputMap.action_add_event("ranged_attack", ranged_event)
+	if not InputMap.has_action("next_vessel"):
+		InputMap.add_action("next_vessel")
+	var next_vessel_event := InputEventKey.new()
+	next_vessel_event.keycode = KEY_TAB
+	next_vessel_event.physical_keycode = KEY_TAB
+	if not InputMap.action_has_event("next_vessel", next_vessel_event):
+		InputMap.action_add_event("next_vessel", next_vessel_event)
+	var next_vessel_fallback := InputEventKey.new()
+	next_vessel_fallback.keycode = KEY_C
+	next_vessel_fallback.physical_keycode = KEY_C
+	if not InputMap.action_has_event("next_vessel", next_vessel_fallback):
+		InputMap.action_add_event("next_vessel", next_vessel_fallback)
 
 func _on_turn_started(actor: Node) -> void:
 	if actor == self:
 		reset_ap()
 		last_attack_result = "Ready"
 		disengage_active = false
+		var squad_manager := _get_squad_manager()
+		if squad_manager:
+			squad_manager.set_active_vessel(self)
+		_focus_camera_on_self()
 
 func _on_combat_started(_actors: Array) -> void:
 	last_attack_result = "Ready"
@@ -880,3 +922,53 @@ func _xz_distance_to(target: Vector3) -> float:
 
 static func _xz_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z))
+
+func _get_squad_manager() -> Node:
+	var tree := get_tree()
+	if not tree:
+		return null
+	return tree.root.get_node_or_null("SquadManager")
+
+func _switch_to_next_vessel() -> void:
+	var squad_manager := _get_squad_manager()
+	var next_vessel: Node = null
+	if squad_manager:
+		print("Squad living vessels: ", squad_manager.get_living_vessels().size())
+		next_vessel = squad_manager.get_next_living_vessel(self)
+	else:
+		var living: Array = []
+		for unit in get_tree().get_nodes_in_group("player"):
+			if unit == null:
+				continue
+			if unit.has_method("get_current_hp") and unit.get_current_hp() <= 0:
+				continue
+			living.append(unit)
+		if not living.is_empty():
+			var idx := living.find(self)
+			if idx == -1:
+				next_vessel = living[0]
+			else:
+				next_vessel = living[(idx + 1) % living.size()]
+		print("Fallback living vessels: ", living.size())
+	if next_vessel == null or next_vessel == self:
+		print("Switch aborted: next vessel invalid or same. current=", name)
+		return
+	print("Attempting switch from %s to %s" % [name, next_vessel.name])
+	if not CombatManager or not CombatManager.set_current_actor(next_vessel):
+		print("Switch failed: CombatManager rejected actor.")
+		return
+	if squad_manager:
+		squad_manager.set_active_vessel(next_vessel)
+	if next_vessel.has_method("_focus_camera_on_self"):
+		next_vessel.call("_focus_camera_on_self")
+	print("Switch success: now controlling ", next_vessel.name)
+
+func _focus_camera_on_self() -> void:
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	var camera_rig := scene.get_node_or_null("CameraRig")
+	if not camera_rig:
+		return
+	if "follow_target" in camera_rig:
+		camera_rig.follow_target = camera_rig.get_path_to(self)

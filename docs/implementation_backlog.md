@@ -11,17 +11,17 @@ Source alignment:
 - Build toward squad-based roguelike runs, not single-character CRPG flow.
 
 ## Milestones
-1. M1 - Mission Run Skeleton
-2. M2 - Squad Control + Multi-Unit Combat UX
+1. ~~M1 - Mission Run Skeleton~~ (First pass complete)
+2. M2 - Squad Control + Multi-Unit Combat UX (In progress)
 3. M3 - Encounter Depth (Enemy Roles + Hazard Combos)
 4. M4 - Run Progression + Unlocks
 5. M5 - Mercury Vault Vertical Slice
 
 ## P0 Backlog (Build First)
-### B001 - Run State Controller
+### ~~B001 - Run State Controller~~
 - Priority: P0
 - Milestone: M1
-- Status: First pass implemented (2026-02-06)
+- Status: Completed (first pass) on 2026-02-06
 - Outcome: Mission flow supports `deploy -> encounter -> extraction -> results`.
 - Implementation:
 - Add `scripts/systems/run_controller.gd`.
@@ -37,10 +37,10 @@ Source alignment:
 - Encounter completion transitions to extraction state.
 - Extraction or squad wipe transitions to results state.
 
-### B002 - Pressure System Consequence Wiring
+### ~~B002 - Pressure System Consequence Wiring~~
 - Priority: P0
 - Milestone: M1
-- Status: First pass implemented (2026-02-06)
+- Status: Completed (first pass) on 2026-02-06
 - Outcome: Pressure tracks/timers have concrete gameplay effects at thresholds.
 - Implementation:
 - Extend pressure system callbacks for threshold events and timer expiry.
@@ -55,9 +55,10 @@ Source alignment:
 - At least two pressure systems trigger visible battlefield/state changes.
 - HUD shows pressure values/timers and pending threshold effects.
 
-### B003 - Squad Entity Foundation (2-4 Vessels)
+### ~~B003 - Squad Entity Foundation (2-4 Vessels)~~
 - Priority: P0
 - Milestone: M2
+- Status: Completed (first pass) on 2026-02-06
 - Outcome: Player controls multiple units in one mission.
 - Implementation:
 - Create squad manager with active unit selection.
@@ -77,11 +78,17 @@ Source alignment:
 ### B004 - Multi-Unit Combat UI
 - Priority: P0
 - Milestone: M2
+- Status: In progress (partial) on 2026-02-06
 - Outcome: UI clearly supports active unit context.
 - Implementation:
 - Add squad panel for unit selection and AP snapshot.
 - Show active unit marker and AP/action context in HUD.
 - Preserve existing threat and damage indicators.
+- First-pass implementation notes:
+- Added active Vessel switching during player turns (`Tab` / fallback `C`).
+- Added camera handoff when switching active Vessel.
+- Added combat-frame input guard to prevent double-switch bounce.
+- Refactored HUD into compact bottom overlay and reduced clutter.
 - Target files:
 - `scripts/ui/combat_hud.gd`
 - `scripts/ui/combat_overlay.gd`

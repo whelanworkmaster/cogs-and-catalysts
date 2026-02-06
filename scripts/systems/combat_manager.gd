@@ -12,6 +12,7 @@ signal toxicity_threshold_reached(progress: int, threshold: int)
 var active_combat: bool = false
 var actors: Array = []
 var current_actor_index: int = -1
+var _last_actor_switch_frame: int = -1
 
 @export var move_ap_cost: int = 1
 @export var attack_ap_cost: int = 3
@@ -33,7 +34,13 @@ func start_combat(combat_actors: Array) -> void:
 	if active_combat:
 		return
 	active_combat = true
-	actors = combat_actors
+	actors.clear()
+	for actor in combat_actors:
+		if actor == null:
+			continue
+		if actors.has(actor):
+			continue
+		actors.append(actor)
 	current_actor_index = -1
 	GameMode.set_mode(GameMode.Mode.TURN_COMBAT)
 	combat_started.emit(actors)
@@ -56,6 +63,26 @@ func add_actor(actor: Node) -> void:
 		return
 	actors.append(actor)
 
+func set_current_actor(actor: Node) -> bool:
+	if not active_combat:
+		return false
+	if actor == null:
+		return false
+	var index := actors.find(actor)
+	if index == -1:
+		return false
+	if actor.has_method("get_current_hp") and actor.get_current_hp() <= 0:
+		return false
+	current_actor_index = index
+	return true
+
+func can_process_actor_switch_input() -> bool:
+	var frame: int = Engine.get_physics_frames()
+	if _last_actor_switch_frame == frame:
+		return false
+	_last_actor_switch_frame = frame
+	return true
+
 func end_turn() -> void:
 	if not active_combat or current_actor_index < 0 or current_actor_index >= actors.size():
 		return
@@ -67,20 +94,24 @@ func remove_actor(actor: Node) -> void:
 	var index := actors.find(actor)
 	if index == -1:
 		return
+	var removed_current := index == current_actor_index
 	actors.remove_at(index)
 	if not active_combat:
 		return
-	if actors.size() == 1 and actors[0].is_in_group("player"):
+	if _count_group_actors("player") == 0:
+		end_combat()
+		return
+	if _count_group_actors("enemy") == 0:
 		end_combat()
 		return
 	if actors.is_empty():
 		end_combat()
 		return
-	if index < current_actor_index:
-		current_actor_index -= 1
-	elif index == current_actor_index:
+	if removed_current:
 		current_actor_index -= 1
 		_next_turn()
+	elif index < current_actor_index:
+		current_actor_index -= 1
 
 func get_current_actor() -> Node:
 	if current_actor_index < 0 or current_actor_index >= actors.size():
@@ -158,9 +189,15 @@ func _next_turn() -> void:
 	if actors.is_empty():
 		end_combat()
 		return
-	current_actor_index = (current_actor_index + 1) % actors.size()
-	var actor: Node = actors[current_actor_index] as Node
-	turn_started.emit(actor)
+	var attempts := 0
+	while attempts < actors.size():
+		current_actor_index = (current_actor_index + 1) % actors.size()
+		var actor: Node = actors[current_actor_index] as Node
+		if _is_actor_turn_valid(actor):
+			turn_started.emit(actor)
+			return
+		attempts += 1
+	end_combat()
 
 func _emit_alert_thresholds(previous_progress: int, new_progress: int) -> void:
 	for threshold in alert_thresholds:
@@ -192,3 +229,30 @@ func _get_next_threshold(progress: int, thresholds: PackedInt32Array, triggered:
 			continue
 		return threshold
 	return -1
+
+func _count_group_actors(group_name: StringName) -> int:
+	var count := 0
+	for actor in actors:
+		if actor == null:
+			continue
+		if not is_instance_valid(actor):
+			continue
+		if actor.is_queued_for_deletion():
+			continue
+		if not actor.is_in_group(group_name):
+			continue
+		if actor.has_method("get_current_hp") and actor.get_current_hp() <= 0:
+			continue
+		count += 1
+	return count
+
+func _is_actor_turn_valid(actor: Node) -> bool:
+	if actor == null:
+		return false
+	if not is_instance_valid(actor):
+		return false
+	if actor.is_queued_for_deletion():
+		return false
+	if actor.has_method("get_current_hp") and actor.get_current_hp() <= 0:
+		return false
+	return true
