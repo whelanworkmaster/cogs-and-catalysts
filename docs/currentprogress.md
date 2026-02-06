@@ -1,105 +1,85 @@
 # Current Progress - Cogs & Catalyst
 
-## Overall Plan (High Level)
-1) Foundation (Godot 4.x)
-   - Core scenes: Main, Player, World, Combat HUD.
-   - Movement + elevation handling (real 3D with CSG primitives).
-   - Data-driven setup (Resources for stats, abilities, mutations).
+## Alignment Update (2026-02-06)
+This document has been updated to match the new direction in `docs/designbible.md`.
 
-2) LUMEN Combat Loop
-   - Deterministic hits (no to-hit roll).
-   - AP economy + Body Strain as a persistent cost.
-   - Drops: Mutagenic Cells fuel abilities.
+Strategic change:
+- Removed CRPG-first framing.
+- Removed dependency on tabletop-derived rule sets.
+- Prioritized a unique tactical roguelike structure centered on combat encounters.
 
-3) FitD Meta Systems
-   - Visual Clocks (Detection, Toxicity, Vault, Reinforcement).
-   - Faction tiers + district/shop unlocks.
-   - Position & Effect framing for risky interactions.
+## Current Build Status
+### Core Tactical Foundation (Working)
+- Full 3D tactical map migration is complete.
+- Orthographic orbit camera is in place (XCOM-style readability).
+- Turn-based combat loop exists with AP spending and turn order.
+- Click-to-move grid pathing via A* is working.
+- Enemy turn behavior and basic ranged logic are functional.
+- Threat, damage feedback, and combat overlays are implemented.
 
-4) Internal Rig (Biological Architecture)
-   - Organ slot loadout at heist start.
-   - Mutagens as "classes" granting moves.
+### Encounter Systems (Working / Partial)
+- Procedural combat space with buildings and blockers.
+- Hazard actors (steam vents) and resource pickups (mutagenic cells).
+- Pressure HUD scaffolding exists (Alert Level/Toxicity Load).
+- Reinforcement and mission-failure consequences are not fully defined yet.
 
-5) MVP Slice: "Mercury Vault"
-   - Safehouse -> Heist loop.
-   - One tactical floor with a hazard interaction.
-   - Extraction race vs. clocks.
+### Architecture
+- State split between exploration/combat already exists, but this should evolve into mission-run flow states.
+- Data-driven system approach is partially present and should be expanded for squad, abilities, and encounter templates.
 
-## Where We Are Now
-- **Full 3D migration complete.** The project has been ported from 2D (fake 2.5D elevation) to real 3D using CSG primitives and an orthographic orbit camera.
-- Project structure: `scenes/`, `scripts/`, `scripts/world`, `scripts/systems`, `scripts/ai`, `scripts/ui`, `scripts/actors`.
-- GameMode singleton with exploration vs. turn-based states.
-- CombatManager singleton with turn order and start/end combat.
-- Combat auto-starts on scene load.
+## What This Means for Scope
+The existing codebase is a strong tactical prototype. The main gap is product structure:
+- Current implementation still behaves like a single-character tactical RPG sandbox.
+- Target implementation is a squad-based tactical roguelike run loop.
 
-### Camera
-- Orthographic Camera3D with fixed-pitch (45-degree) orbit (BG3/XCOM style).
-- Middle mouse drag = yaw rotation, scroll wheel = zoom.
-- Camera follows player with smoothing.
-- Camera distance scales with zoom to prevent view clipping.
+No major rewrite is required for fundamentals; the next phase is system layering and content architecture.
 
-### Player
-- CharacterBody3D with CSGBox3D visual (blue, 32x32x32).
-- **Click-to-move** (XCOM/BG3 style): left-click a grid cell to pathfind and walk there via A*.
-  - Exploration: click-to-move with no AP cost, no path length limit.
-  - Combat: each cell costs AP; path is truncated to affordable length.
-  - Click on an enemy in combat to attack (if within attack range).
-  - Path preview line shown on hover (green line on grid overlay).
-  - Movement is animated cell-by-cell via tween.
-- AP resets at the start of the player's turn.
-- Stances (Neutral/Guard/Aggress/Evade), Disengage toggle, reaction attacks on leaving threat range.
-- Attack: F key for nearest target, or click enemy directly.
-- Hit feedback (flash + squash/stretch) and floating damage numbers via `camera.unproject_position()`.
-- Death animation and Game Over overlay with retry.
-- Mutagenic cell pickup.
+## Updated Goals
+### Goal 1 - Lock Identity
+- Keep deterministic tactical combat as the primary gameplay loop.
+- Avoid importing external tabletop mechanics/rule language.
+- Use only bespoke, digital-first combat and progression systems.
 
-### Enemy
-- CharacterBody3D with CSGBox3D visual (red, 28x28x28).
-- AI state scaffold (idle -> seek) with AP-based movement.
-- A* grid pathfinding around buildings (AStarGrid2D internally, Vector3 wrappers externally). Enemy movement uses direct grid-cell positioning (no physics collision).
-- Ranged attacks use geometric line-of-sight checks against building footprints. Enemies will not fire if a building blocks the shot.
-- Ranged shot visual: ImmediateMesh line with fade-out tween.
-- Death drops mutagenic cell.
-- Threat ring visual (ImmediateMesh circle on ground).
+### Goal 2 - Shift to Run Structure
+- Replace open-ended exploration framing with operation-based flow.
+- Build run sequence: deploy -> encounter chain -> extraction -> post-run unlocks.
+- Ensure mission pressure tracks/timers create escalating pressure and decisive end states.
 
-### World / Procgen
-- Node3D scene root with AStarGrid2D pathfinding on the XZ plane.
-- `snap_to_grid()` and `get_astar_path_3d()` accept both Vector2 and Vector3.
-- Randomized building layout (4-6 buildings, CSGBox3D with StaticBody3D blockers).
-- Randomized enemy count/placement and player start with spacing checks.
-- Randomized steam vent placement (2-3 vents) with spacing vs. buildings/enemies/player.
-- Grid overlay: ImmediateMesh line grid on XZ plane, skips building footprints.
-- Ground plane: CSGBox3D (4000x1x4000).
+### Goal 3 - Shift to Squad Tactics
+- Expand from one controllable unit to 2-4 Vessels.
+- Add role differentiation through modules/loadouts, not fixed classes.
+- Tune UI for multi-unit AP, threat, and action previews.
 
-### Elevation
-- Buildings are real 3D CSGBox3D volumes with StaticBody3D collision.
-- Area3D detection zones on top surface trigger elevation changes.
-- Actors set `global_position.y = elevation_height` when entering/exiting zones.
-- Elevation zones added to `nav_obstacle` group for pathfinding exclusion.
+### Goal 4 - Encounter Depth
+- Add enemy role diversity (anchor, disruptor, pressure, support).
+- Expand hazard interactions into reliable tactical tools.
+- Formalize reinforcement and alarm breakpoints tied to pressure thresholds.
 
-### Hazards
-- Steam vent: Area3D with CSGBox3D visual, ticks Toxicity on contact.
-- Mutagenic cell: Node3D with emissive CSGBox3D, Area3D + SphereShape3D pickup.
+## Recommended Development Order (Revised)
+1) Mission Loop Skeleton
+- Add run state controller (deploy, encounter, extraction, results).
+- Wire pressure tracks/timers to concrete mission consequences.
 
-### Combat Visuals
-- Stance ring (color-coded by stance) and dashed disengage ring: MeshInstance3D + ImmediateMesh.
-- Enemy threat range ring: MeshInstance3D + ImmediateMesh.
-- Damage popups: screen-space via `camera.unproject_position()`.
+2) Squad Control Layer
+- Implement unit selection/switching and per-unit AP display.
+- Support shared mission objectives across all deployed Vessels.
 
-### FitD Clocks
-- Detection/Toxicity clocks displayed in HUD.
-- Detection ticks on combat start + player moves + player attacks.
-- Toxicity ticks when player takes damage and on steam vent contact.
+3) Encounter Role Expansion
+- Add at least one new enemy battlefield role.
+- Add one hazard combo mechanic that changes positioning choices.
 
-### Lighting
-- DirectionalLight3D with shadows.
-- WorldEnvironment with dark background and ambient light.
+4) Progression Pass
+- Introduce post-run unlock selection (modules, squad options, map modifiers).
+- Track unlock persistence across runs.
 
-## Current Files / Systems
+5) Mercury Vault Vertical Slice (Reframed)
+- Deliver one complete run with 2-3 tactical encounters and extraction pressure.
+
+## Existing Systems and Files (Still Relevant)
 - `scripts/camera/camera_rig.gd`
 - `scripts/systems/game_mode_controller.gd`
 - `scripts/systems/combat_manager.gd`
-- `scripts/systems/clock.gd`
+- `scripts/systems/pressure_system.gd`
 - `scripts/world/main.gd`
 - `scripts/world/elevation_area.gd`
 - `scripts/world/steam_vent.gd`
@@ -116,36 +96,12 @@
 - `scripts/ui/enemy_threat_visual.gd`
 - `scripts/ui/damage_popup.gd`
 - `scripts/ui/game_over.gd`
-- `scenes/main.tscn`, `scenes/player.tscn`, `scenes/enemy.tscn`, `scenes/ui/combat_hud.tscn`, `scenes/ui/game_over.tscn`
-
-## Next Steps (Suggested Order)
-1) Level challenge and encounter design (MVP)
-   - Tune procgen (building/vent counts, spacing, seeds) for reliable layout variety.
-   - Consider a second enemy type (melee or support) to diversify positioning.
-   - Place cover or blockers that shape movement and create threat zones.
-
-2) FitD clocks (polish)
-   - Replace labels with segmented UI bars (4/6/8).
-   - Define clear "full clock" consequences (alarm/reinforcements).
-
-3) Internal Rig loadout
-   - Organ slot loadout selection at heist start.
-   - One mutagen (Hydraulic Leg or Tendrils) with 1-2 moves.
-
-4) Position & Effect framing
-   - Simple pre-interaction UI (Controlled/Risky/Desperate).
-   - Hook outcomes to clock ticks or glitches.
-
-5) Factions + tiers
-   - Dictionary for faction tiers (-3 to +3).
-   - Tie tier to shop inventory or district layout toggle.
-
-6) MVP "Mercury Vault" slice
-   - One tactical floor with a steam vent hazard.
-   - Vault + Reinforcement clocks driving extraction.
+- `scenes/main.tscn`
+- `scenes/player.tscn`
+- `scenes/enemy.tscn`
+- `scenes/ui/combat_hud.tscn`
+- `scenes/ui/game_over.tscn`
 
 ## Notes
-- All distance constants are in pixel scale (32, 40, 240, 750). Works but the world is very large. Scale normalization is a future pass.
-- Movement is click-to-move (left-click on grid). WASD/arrow keys no longer used for movement.
-- The player is in the `player` group for AI targeting.
-- Procgen runs after scene load (deferred) to ensure obstacle groups are populated.
+- World scale constants are still oversized and should be normalized in a dedicated tuning pass.
+- Current prototype favors single-unit control; squad support is now a priority, not an optional extension.

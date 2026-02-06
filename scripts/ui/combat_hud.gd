@@ -13,15 +13,15 @@ extends CanvasLayer
 @onready var range_label: Label = $MarginContainer/VBoxContainer/RangeLabel
 @onready var attack_label: Label = $MarginContainer/VBoxContainer/AttackLabel
 @onready var cells_label: Label = $MarginContainer/VBoxContainer/CellsLabel
-@onready var detection_clock_label: Label = $MarginContainer/VBoxContainer/DetectionClockLabel
-@onready var toxicity_clock_label: Label = $MarginContainer/VBoxContainer/ToxicityClockLabel
+@onready var alert_level_label: Label = $MarginContainer/VBoxContainer/AlertLevelLabel
+@onready var toxicity_load_label: Label = $MarginContainer/VBoxContainer/ToxicityLoadLabel
 
 func _ready() -> void:
 	_refresh_mode()
 	_refresh_actor()
 	_refresh_controls()
 	_refresh_state()
-	_refresh_clocks()
+	_refresh_pressure()
 	if GameMode:
 		GameMode.mode_changed.connect(_on_mode_changed)
 	if CombatManager:
@@ -35,7 +35,7 @@ func _process(_delta: float) -> void:
 	_refresh_state()
 	_refresh_enemy_status()
 	_refresh_player_status()
-	_refresh_clocks()
+	_refresh_pressure()
 
 func _on_mode_changed(_new_mode: int, _previous_mode: int) -> void:
 	_refresh_mode()
@@ -121,15 +121,15 @@ func _refresh_state() -> void:
 	var combat_state := "Combat: %s" % ("Active" if combat_active else "Idle")
 	state_label.text = "%s  %s  %s" % [combat_state, actor_state, ap_costs]
 
-func _refresh_clocks() -> void:
-	if CombatManager and CombatManager.detection_clock:
-		detection_clock_label.text = CombatManager.detection_clock.to_display()
+func _refresh_pressure() -> void:
+	if CombatManager and CombatManager.alert_level:
+		alert_level_label.text = CombatManager.alert_level.to_display()
 	else:
-		detection_clock_label.text = "Detection: -"
-	if CombatManager and CombatManager.toxicity_clock:
-		toxicity_clock_label.text = CombatManager.toxicity_clock.to_display()
+		alert_level_label.text = "Alert Level: -"
+	if CombatManager and CombatManager.toxicity_load:
+		toxicity_load_label.text = CombatManager.toxicity_load.to_display()
 	else:
-		toxicity_clock_label.text = "Toxicity: -"
+		toxicity_load_label.text = "Toxicity Load: -"
 
 func _refresh_enemy_status() -> void:
 	var player: Node = get_tree().get_first_node_in_group("player")

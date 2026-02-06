@@ -4,8 +4,8 @@ signal combat_started(actors: Array)
 signal combat_ended()
 signal turn_started(actor: Node)
 signal turn_ended(actor: Node)
-signal detection_clock_ticked(progress: int, segments: int)
-signal toxicity_clock_ticked(progress: int, segments: int)
+signal alert_level_changed(progress: int, segments: int)
+signal toxicity_load_changed(progress: int, segments: int)
 
 var active_combat: bool = false
 var actors: Array = []
@@ -16,12 +16,12 @@ var current_actor_index: int = -1
 @export var ranged_attack_ap_cost: int = 4
 @export var ability_ap_cost: int = 2
 
-const Clock = preload("res://scripts/systems/clock.gd")
-var detection_clock: Clock
-var toxicity_clock: Clock
+const PressureSystem = preload("res://scripts/systems/pressure_system.gd")
+var alert_level: PressureSystem
+var toxicity_load: PressureSystem
 
 func _ready() -> void:
-	_initialize_clocks()
+	_initialize_pressure_systems()
 
 func start_combat(combat_actors: Array) -> void:
 	if active_combat:
@@ -31,7 +31,7 @@ func start_combat(combat_actors: Array) -> void:
 	current_actor_index = -1
 	GameMode.set_mode(GameMode.Mode.TURN_COMBAT)
 	combat_started.emit(actors)
-	tick_detection(1)
+	tick_alert_level(1)
 	_next_turn()
 
 func end_combat() -> void:
@@ -87,28 +87,28 @@ func get_ap_cost(action: StringName) -> int:
 		_:
 			return 0
 
-func tick_detection(steps: int = 1) -> void:
-	if not detection_clock:
+func tick_alert_level(steps: int = 1) -> void:
+	if not alert_level:
 		return
-	detection_clock.tick(steps)
-	detection_clock_ticked.emit(detection_clock.progress, detection_clock.segments)
+	alert_level.tick(steps)
+	alert_level_changed.emit(alert_level.progress, alert_level.segments)
 
-func tick_toxicity(steps: int = 1) -> void:
-	if not toxicity_clock:
+func tick_toxicity_load(steps: int = 1) -> void:
+	if not toxicity_load:
 		return
-	toxicity_clock.tick(steps)
-	toxicity_clock_ticked.emit(toxicity_clock.progress, toxicity_clock.segments)
-	print("ALARM: Toxicity clock %s/%s" % [toxicity_clock.progress, toxicity_clock.segments])
+	toxicity_load.tick(steps)
+	toxicity_load_changed.emit(toxicity_load.progress, toxicity_load.segments)
+	print("ALARM: Toxicity load %s/%s" % [toxicity_load.progress, toxicity_load.segments])
 
-func _initialize_clocks() -> void:
-	detection_clock = Clock.new()
-	detection_clock.name = "Detection"
-	detection_clock.segments = 6
-	detection_clock.progress = 0
-	toxicity_clock = Clock.new()
-	toxicity_clock.name = "Toxicity"
-	toxicity_clock.segments = 4
-	toxicity_clock.progress = 0
+func _initialize_pressure_systems() -> void:
+	alert_level = PressureSystem.new()
+	alert_level.name = "Alert Level"
+	alert_level.segments = 6
+	alert_level.progress = 0
+	toxicity_load = PressureSystem.new()
+	toxicity_load.name = "Toxicity Load"
+	toxicity_load.segments = 4
+	toxicity_load.progress = 0
 
 func _next_turn() -> void:
 	if actors.is_empty():

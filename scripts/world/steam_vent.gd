@@ -66,4 +66,4 @@ func _apply_effect(body: Node) -> void:
 		body.take_damage(damage_amount, self)
 	if toxicity_ticks > 0 and CombatManager:
 		if not (damage_amount > 0 and body.is_in_group("player")):
-			CombatManager.tick_toxicity(toxicity_ticks)
+			CombatManager.tick_toxicity_load(toxicity_ticks)

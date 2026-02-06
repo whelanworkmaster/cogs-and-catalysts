@@ -1,8 +1,8 @@
 extends Resource
 
-class_name Clock
+class_name PressureSystem
 
-@export var name: String = "Clock"
+@export var name: String = "Pressure"
 @export var segments: int = 4
 @export var progress: int = 0
 

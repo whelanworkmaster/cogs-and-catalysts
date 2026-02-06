@@ -56,11 +56,11 @@ text = "Attack: -"
 [node name="CellsLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 text = "Cells: -"
 
-[node name="ClocksTitle" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Clocks"
+[node name="PressureTitle" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Pressure"
 
-[node name="DetectionClockLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Detection: 0/4"
+[node name="AlertLevelLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Alert Level: 0/4"
 
-[node name="ToxicityClockLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Toxicity: 0/4"
+[node name="ToxicityLoadLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Toxicity Load: 0/4"

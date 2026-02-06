@@ -1,65 +1,73 @@
-# ---
+# Design Bible - Cogs & Catalyst
 
-**📄 GDD One-Pager: *Project Cogs & Catalyst***
+## Direction Shift (2026-02-06)
+This project is no longer targeting a CRPG structure or any adaptation of existing tabletop RPG rule sets.
 
-**Genre:** Single-Character Isometric CRPG
+The game direction is now:
+- A unique tactical roguelike with short, high-stakes operations.
+- XCOM-like positional combat, but with original systems and terminology.
+- Minimal narrative overhead during missions; strategy comes from terrain, hazards, and build choices.
 
-**Setting:** Alchemical Noir (Dark Fantasy / Biopunk)
+## High-Level Vision
+You command a small strike unit of modified operatives ("Vessels") in an alchemical-industrial city under authoritarian control. Each operation is a tactical incursion into hostile districts where survival, extraction, and adaptation matter more than linear story progression.
 
-**Core Loop:** Exploration Tactical Combat Biological Augmentation
+The identity is:
+- System-first tactical gameplay.
+- Deterministic and readable combat outcomes.
+- Build expression through biotech loadouts, not class archetypes from existing games.
 
-## ---
+## Core Gameplay Pillars
+### 1) Tactical Encounters First
+- Turn-based, grid-based combat is the center of the experience.
+- Encounters are compact and dangerous; positioning and AP efficiency decide outcomes.
+- Environmental control is a primary strategy layer (steam, pressure lines, elevation, cover lanes).
 
-**1\. High-Level Vision**
+### 2) Roguelike Campaign Structure
+- Campaign is run-based: multiple tactical nodes per run, escalating pressure, then extraction or defeat.
+- Persistent meta-unlocks provide new tools and options, not guaranteed power creep.
+- Failure is expected and informative; runs should generate new tactical decisions rather than scripted repetition.
 
-In a rain-slicked metropolis ruled by the **Iron Censorate** (a fascist alchemical state), you play a "Fixer" navigating a web of warring political factions. You are a "Vessel"—a mercenary who illegally modifies their own biology with volatile mutagens to survive impossible odds. The game eschews "trash mob" grinding and stealth-skipping in favor of high-impact, tactical combat encounters.
+### 3) Biological Buildcraft
+- Units equip mutagenic modules in limited organ slots.
+- Modules alter actions, reactions, and turn economy.
+- Toxicity/Strain is a core cost system that pushes risk-reward decisions every encounter.
 
-## **2\. Core Gameplay Pillars**
+### 4) Pressure Tracks and Response Timers
+- Mission pressure systems (Alert Level, Enemy Response Timer, Objective Breach Timer, Toxicity Load) drive tempo.
+- Player actions advance pressure tracks or timers; thresholds change enemy behavior and map conditions.
+- Missions should end with urgent extraction decisions, not full-map cleanup.
 
-### **A. Narrative Exploration (Real-Time)**
+## Design Principles (Non-Tabletop)
+- No direct import of D20/FitD/PbtA or other tabletop mechanics/rule language.
+- No "to-hit roll" dependency as baseline; prioritize deterministic resolution with explicit modifiers.
+- Prefer bespoke mechanics built for digital clarity, fast turns, and strong UI readability.
+- Every system must answer: "Does this create better tactical decisions in 1-3 turns?"
 
-* **The World:** A modular, "Z-axis" focused city built on Godot’s TileMap/GridMap system.  
-* **Parkour Navigation:** Movement isn't flat. Players use biological upgrades (Hydraulic Legs, Grappling Tendrils) to find vertical shortcuts and hidden caches.  
-* **Interaction:** A robust system for environmental storytelling (Data Slates, Alchemical Residue) and faction-based quest gating.
+## World and Tone
+- Alchemical noir + biopunk remains the aesthetic anchor.
+- Factions exist to shape enemy behaviors, mission modifiers, and upgrade access.
+- Narrative is delivered through mission context and post-run consequences, not long CRPG dialogue trees.
 
-### **B. Tactical Combat (Turn-Based)**
+## Technical Approach (Godot 4.x)
+- 3D grid combat spaces with orthographic tactical camera.
+- Data-driven definitions for units, modules, abilities, hazards, and encounter templates.
+- Role-based enemy AI with clear battlefield jobs (pressure, anchor, disruptor, support).
+- UI emphasis on telegraphing AP costs, threat ranges, pressure state, and extraction state.
 
-* **The Combat Bubble:** Transitions from real-time exploration to a grid-based tactical layer upon engagement.  
-* **Action Point (AP) Economy:** A deterministic system where every move—climbing, attacking, or venting toxicity—costs AP.  
-* **Environmental Engineering:** Combat is won by manipulating the terrain (igniting oil spills, breaking steam pipes, knocking enemies off ledges).
+## Current Product Goals
+### Immediate Goals
+- Lock tactical-combat-first identity across code and docs.
+- Build one fully playable run loop: deploy -> 2-3 encounters -> extraction -> results.
+- Support a 2-4 Vessel squad baseline (not single-character CRPG flow).
 
-### **C. Biological Architecture (Progression)**
+### Mid-Term Goals
+- Introduce distinct enemy roles and reinforcement behaviors.
+- Expand hazard interactions into repeatable tactical verbs.
+- Add progression that unlocks modules, squad options, and mission modifiers.
 
-* **The "Internal Rig":** Instead of traditional levels, players have limited "Organ Slots" (Nervous System, Ocular, Muscular, etc.).  
-* **Mutagenic Heists:** Power is earned by stealing "Master Mutagens" from high-security labs.  
-* **Toxicity Management:** A risk/reward system where over-using abilities builds "Body Strain," leading to unpredictable debuffs or "Glitch" turns.
-
-## ---
-
-**3\. The Political Landscape**
-
-Players balance their reputation between three primary ideologies, affecting available upgrades and world state:
-
-1. **The Iron Censorate (State):** The "Antagonistic Force." High-tech, armored, and oppressive.  
-2. **The Commonweal (Leftist/Collectivist):** Focused on resilience and area-of-effect mutations.  
-3. **The Free-Strider Syndicate (Libertarian):** Focused on high-damage, high-risk "glass cannon" upgrades.
-
-## ---
-
-**4\. Technical Stack (Godot Engine)**
-
-* **Movement:** 8-way Isometric with a custom Z-axis handler for verticality.  
-* **Data:** JSON or Custom Resources to define Mutations, Enemy Stats, and Item Attributes.  
-* **AI:** Role-based State Machines (Strikers, Bulks, Alchemists) that prioritize environmental hazards.  
-* **UI:** A modular bottom-row Hotbar that dynamically updates based on currently "installed" biological organs.
-
-## ---
-
-**5\. MVP (Minimum Viable Product) Goal**
-
-**The "Mercury Vault" Heist:**
-
-* Build one functional city block with verticality.  
-* Implement the transition from Real-Time movement to Turn-Based combat.  
-* Create one Boss Encounter (The Censor-Overseer) featuring environmental interactions.  
-* Implement a basic "Inventory" UI where one Mutagen can be "slotted" to change player stats.
+### MVP Goal ("Mercury Vault" Reframed)
+Deliver a vertical slice proving the new direction:
+- Squad deployment into one tactical district.
+- Deterministic AP combat with hazards, pressure tracks/timers, and reinforcement pressure.
+- Mid-mission objective pivot (vault breach or data steal) with extraction race.
+- End-of-run resolution with unlock/progression choices for next run.

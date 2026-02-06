@@ -218,7 +218,7 @@ func _on_step_start(next_pos: Vector3, direction: Vector3, in_combat: bool) -> v
 			print("Ran out of AP mid-path!")
 			return
 		_attempt_reaction_attack(next_pos)
-		_tick_detection()
+		_tick_alert_level()
 
 func _on_walk_complete() -> void:
 	_is_moving = false
@@ -387,8 +387,8 @@ func _attack_target(target: Node) -> void:
 		last_attack_result = "Hit for %s" % damage
 		print("Attack hit for ", damage)
 		if current_stance == Stance.AGGRESS:
-			_tick_detection()
-		_tick_detection()
+			_tick_alert_level()
+		_tick_alert_level()
 
 func _ranged_attack_target(target: Node) -> void:
 	if _is_dead:
@@ -435,8 +435,8 @@ func _ranged_attack_target(target: Node) -> void:
 		last_attack_result = "Ranged hit for %s" % damage
 		print("Ranged attack hit for ", damage)
 		if current_stance == Stance.AGGRESS:
-			_tick_detection()
-		_tick_detection()
+			_tick_alert_level()
+		_tick_alert_level()
 
 func handle_turn_input():
 	if not CombatManager:
@@ -585,7 +585,7 @@ func take_damage(amount: int, source: Node = null) -> void:
 	_spawn_damage_popup(reduced_amount, Color(1.0, 0.8, 0.2))
 	_play_hit_feedback()
 	if CombatManager:
-		CombatManager.tick_toxicity(1)
+		CombatManager.tick_toxicity_load(1)
 	if current_hp <= 0:
 		_die()
 
@@ -602,9 +602,9 @@ func _die() -> void:
 	_play_death_effect()
 	_show_game_over()
 
-func _tick_detection() -> void:
+func _tick_alert_level() -> void:
 	if CombatManager:
-		CombatManager.tick_detection(1)
+		CombatManager.tick_alert_level(1)
 
 func _ensure_input_actions() -> void:
 	# Attack key (F only — left-click is now used for click-to-move)
