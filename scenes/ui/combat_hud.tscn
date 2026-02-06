@@ -64,3 +64,9 @@ text = "Alert Level: 0/4"
 
 [node name="ToxicityLoadLabel" type="Label" parent="MarginContainer/VBoxContainer"]
 text = "Toxicity Load: 0/4"
+
+[node name="AlertEffectLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Alert Effect: -"
+
+[node name="ToxicityEffectLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+text = "Toxicity Effect: -"

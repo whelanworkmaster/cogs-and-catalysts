@@ -15,6 +15,8 @@ extends CanvasLayer
 @onready var cells_label: Label = $MarginContainer/VBoxContainer/CellsLabel
 @onready var alert_level_label: Label = $MarginContainer/VBoxContainer/AlertLevelLabel
 @onready var toxicity_load_label: Label = $MarginContainer/VBoxContainer/ToxicityLoadLabel
+@onready var alert_effect_label: Label = $MarginContainer/VBoxContainer/AlertEffectLabel
+@onready var toxicity_effect_label: Label = $MarginContainer/VBoxContainer/ToxicityEffectLabel
 
 func _ready() -> void:
 	_refresh_mode()
@@ -124,12 +126,16 @@ func _refresh_state() -> void:
 func _refresh_pressure() -> void:
 	if CombatManager and CombatManager.alert_level:
 		alert_level_label.text = CombatManager.alert_level.to_display()
+		alert_effect_label.text = "Alert Effect: %s" % CombatManager.describe_next_alert_effect()
 	else:
 		alert_level_label.text = "Alert Level: -"
+		alert_effect_label.text = "Alert Effect: -"
 	if CombatManager and CombatManager.toxicity_load:
 		toxicity_load_label.text = CombatManager.toxicity_load.to_display()
+		toxicity_effect_label.text = "Toxicity Effect: %s" % CombatManager.describe_next_toxicity_effect()
 	else:
 		toxicity_load_label.text = "Toxicity Load: -"
+		toxicity_effect_label.text = "Toxicity Effect: -"
 
 func _refresh_enemy_status() -> void:
 	var player: Node = get_tree().get_first_node_in_group("player")

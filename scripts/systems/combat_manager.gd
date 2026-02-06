@@ -6,6 +6,8 @@ signal turn_started(actor: Node)
 signal turn_ended(actor: Node)
 signal alert_level_changed(progress: int, segments: int)
 signal toxicity_load_changed(progress: int, segments: int)
+signal alert_threshold_reached(progress: int, threshold: int)
+signal toxicity_threshold_reached(progress: int, threshold: int)
 
 var active_combat: bool = false
 var actors: Array = []
@@ -15,10 +17,14 @@ var current_actor_index: int = -1
 @export var attack_ap_cost: int = 3
 @export var ranged_attack_ap_cost: int = 4
 @export var ability_ap_cost: int = 2
+@export var alert_thresholds: PackedInt32Array = PackedInt32Array([5, 8])
+@export var toxicity_thresholds: PackedInt32Array = PackedInt32Array([2, 4])
 
 const PressureSystem = preload("res://scripts/systems/pressure_system.gd")
 var alert_level: PressureSystem
 var toxicity_load: PressureSystem
+var _triggered_alert_thresholds: Dictionary = {}
+var _triggered_toxicity_thresholds: Dictionary = {}
 
 func _ready() -> void:
 	_initialize_pressure_systems()
@@ -42,6 +48,13 @@ func end_combat() -> void:
 	current_actor_index = -1
 	GameMode.set_mode(GameMode.Mode.EXPLORATION)
 	combat_ended.emit()
+
+func add_actor(actor: Node) -> void:
+	if actor == null:
+		return
+	if actors.has(actor):
+		return
+	actors.append(actor)
 
 func end_turn() -> void:
 	if not active_combat or current_actor_index < 0 or current_actor_index >= actors.size():
@@ -90,25 +103,56 @@ func get_ap_cost(action: StringName) -> int:
 func tick_alert_level(steps: int = 1) -> void:
 	if not alert_level:
 		return
+	var previous_progress := alert_level.progress
 	alert_level.tick(steps)
 	alert_level_changed.emit(alert_level.progress, alert_level.segments)
+	_emit_alert_thresholds(previous_progress, alert_level.progress)
 
 func tick_toxicity_load(steps: int = 1) -> void:
 	if not toxicity_load:
 		return
+	var previous_progress := toxicity_load.progress
 	toxicity_load.tick(steps)
 	toxicity_load_changed.emit(toxicity_load.progress, toxicity_load.segments)
+	_emit_toxicity_thresholds(previous_progress, toxicity_load.progress)
 	print("ALARM: Toxicity load %s/%s" % [toxicity_load.progress, toxicity_load.segments])
+
+func reset_pressure_systems() -> void:
+	_initialize_pressure_systems()
+
+func get_next_alert_threshold() -> int:
+	return _get_next_threshold(alert_level.progress, alert_thresholds, _triggered_alert_thresholds)
+
+func get_next_toxicity_threshold() -> int:
+	return _get_next_threshold(toxicity_load.progress, toxicity_thresholds, _triggered_toxicity_thresholds)
+
+func describe_next_alert_effect() -> String:
+	var threshold := get_next_alert_threshold()
+	if threshold == 5:
+		return "Next: Reinforcement wave (+1)"
+	if threshold == 8:
+		return "Next: Reinforcement wave (+1)"
+	return "Next: Max pressure reached"
+
+func describe_next_toxicity_effect() -> String:
+	var threshold := get_next_toxicity_threshold()
+	if threshold == 2:
+		return "Next: Movement AP penalty"
+	if threshold == 4:
+		return "Next: Toxic burst damage"
+	return "Next: Max toxicity reached"
 
 func _initialize_pressure_systems() -> void:
 	alert_level = PressureSystem.new()
 	alert_level.name = "Alert Level"
-	alert_level.segments = 6
+	alert_level.segments = 8
 	alert_level.progress = 0
 	toxicity_load = PressureSystem.new()
 	toxicity_load.name = "Toxicity Load"
 	toxicity_load.segments = 4
 	toxicity_load.progress = 0
+	_triggered_alert_thresholds.clear()
+	_triggered_toxicity_thresholds.clear()
 
 func _next_turn() -> void:
 	if actors.is_empty():
@@ -117,3 +161,34 @@ func _next_turn() -> void:
 	current_actor_index = (current_actor_index + 1) % actors.size()
 	var actor: Node = actors[current_actor_index] as Node
 	turn_started.emit(actor)
+
+func _emit_alert_thresholds(previous_progress: int, new_progress: int) -> void:
+	for threshold in alert_thresholds:
+		if threshold <= previous_progress:
+			continue
+		if threshold > new_progress:
+			continue
+		if _triggered_alert_thresholds.has(threshold):
+			continue
+		_triggered_alert_thresholds[threshold] = true
+		alert_threshold_reached.emit(new_progress, threshold)
+
+func _emit_toxicity_thresholds(previous_progress: int, new_progress: int) -> void:
+	for threshold in toxicity_thresholds:
+		if threshold <= previous_progress:
+			continue
+		if threshold > new_progress:
+			continue
+		if _triggered_toxicity_thresholds.has(threshold):
+			continue
+		_triggered_toxicity_thresholds[threshold] = true
+		toxicity_threshold_reached.emit(new_progress, threshold)
+
+func _get_next_threshold(progress: int, thresholds: PackedInt32Array, triggered: Dictionary) -> int:
+	for threshold in thresholds:
+		if threshold <= progress:
+			continue
+		if triggered.has(threshold):
+			continue
+		return threshold
+	return -1

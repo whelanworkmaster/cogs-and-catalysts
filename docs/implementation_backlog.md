@@ -21,6 +21,7 @@ Source alignment:
 ### B001 - Run State Controller
 - Priority: P0
 - Milestone: M1
+- Status: First pass implemented (2026-02-06)
 - Outcome: Mission flow supports `deploy -> encounter -> extraction -> results`.
 - Implementation:
 - Add `scripts/systems/run_controller.gd`.
@@ -39,6 +40,7 @@ Source alignment:
 ### B002 - Pressure System Consequence Wiring
 - Priority: P0
 - Milestone: M1
+- Status: First pass implemented (2026-02-06)
 - Outcome: Pressure tracks/timers have concrete gameplay effects at thresholds.
 - Implementation:
 - Extend pressure system callbacks for threshold events and timer expiry.

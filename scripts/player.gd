@@ -39,6 +39,7 @@ var _is_moving: bool = false
 var _move_tween: Tween
 var _preview_path: PackedVector3Array = PackedVector3Array()
 var _ap_cost_label: Label
+var _movement_alert_pending: bool = false
 
 # Elevation tracking
 var current_elevation: int = 0
@@ -194,6 +195,7 @@ func _walk_path(path: Array[Vector3]) -> void:
 		_move_tween.kill()
 	_move_tween = create_tween()
 	var in_combat := CombatManager and CombatManager.active_combat
+	_movement_alert_pending = in_combat
 	for i in range(path.size()):
 		var next_pos: Vector3 = path[i]
 		next_pos.y = current_elevation_height
@@ -215,13 +217,16 @@ func _on_step_start(next_pos: Vector3, direction: Vector3, in_combat: bool) -> v
 			if _move_tween and _move_tween.is_running():
 				_move_tween.kill()
 			_is_moving = false
+			_movement_alert_pending = false
 			print("Ran out of AP mid-path!")
 			return
 		_attempt_reaction_attack(next_pos)
-		_tick_alert_level()
 
 func _on_walk_complete() -> void:
 	_is_moving = false
+	if _movement_alert_pending:
+		_tick_alert_level()
+	_movement_alert_pending = false
 
 func _update_path_preview(screen_pos: Vector2) -> void:
 	if _is_moving:

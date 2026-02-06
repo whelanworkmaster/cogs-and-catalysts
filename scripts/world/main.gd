@@ -27,13 +27,26 @@ var nav_region: Node = null  # NavigationRegion3D placeholder — pathfinding us
 var _astar := AStarGrid2D.new()
 var _grid_origin: Vector2 = Vector2.ZERO
 var _rng := RandomNumberGenerator.new()
+var _base_move_ap_cost: int = 1
+var _toxicity_penalty_active: bool = false
 
 const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const STEAM_VENT_SCRIPT := preload("res://scripts/world/steam_vent.gd")
 const INVALID_POS := Vector2.INF
 const INVALID_POS_3D := Vector3.INF
+const RUN_STATE_ENCOUNTER := 2
+const RUN_STATE_EXTRACTION := 3
+const RUN_STATE_RESULTS := 4
 
 func _ready() -> void:
+	if CombatManager:
+		_base_move_ap_cost = CombatManager.move_ap_cost
+		CombatManager.alert_threshold_reached.connect(_on_alert_threshold_reached)
+		CombatManager.toxicity_threshold_reached.connect(_on_toxicity_threshold_reached)
+	var run_controller := _get_run_controller()
+	if run_controller:
+		run_controller.run_state_changed.connect(_on_run_state_changed)
+		run_controller.run_completed.connect(_on_run_completed)
 	call_deferred("_post_scene_setup")
 
 func _post_scene_setup() -> void:
@@ -41,7 +54,12 @@ func _post_scene_setup() -> void:
 		_setup_procgen()
 	_build_navigation()
 	_build_astar_grid()
-	if auto_start_combat:
+	var run_controller := _get_run_controller()
+	if run_controller:
+		run_controller.start_new_run()
+		if auto_start_combat:
+			run_controller.begin_encounter()
+	elif auto_start_combat:
 		_start_combat()
 
 func _start_combat() -> void:
@@ -57,6 +75,80 @@ func _start_combat() -> void:
 			actors.append(enemy)
 	if not actors.is_empty():
 		CombatManager.start_combat(actors)
+
+func _on_run_state_changed(new_state: int, _previous_state: int) -> void:
+	if new_state == RUN_STATE_ENCOUNTER:
+		_start_combat()
+	elif new_state == RUN_STATE_EXTRACTION:
+		print("Run state: Extraction ready.")
+	elif new_state == RUN_STATE_RESULTS:
+		print("Run state: Results.")
+
+func _on_run_completed(success: bool, reason: String) -> void:
+	var outcome := "SUCCESS" if success else "FAILED"
+	print("Run completed: %s (%s)" % [outcome, reason])
+
+func _on_alert_threshold_reached(_progress: int, threshold: int) -> void:
+	if threshold == 5:
+		_spawn_reinforcements(1)
+	elif threshold == 8:
+		_spawn_reinforcements(1)
+
+func _on_toxicity_threshold_reached(_progress: int, threshold: int) -> void:
+	if not CombatManager:
+		return
+	if threshold == 2 and not _toxicity_penalty_active:
+		_toxicity_penalty_active = true
+		CombatManager.move_ap_cost = _base_move_ap_cost + 1
+		print("Pressure: Toxicity penalty active (+1 move AP cost).")
+	elif threshold == 4:
+		var player := get_tree().get_first_node_in_group("player")
+		if player and player.has_method("take_damage"):
+			player.take_damage(2, self)
+		CombatManager.toxicity_load.progress = 0
+		_toxicity_penalty_active = false
+		CombatManager.move_ap_cost = _base_move_ap_cost
+		print("Pressure: Toxic burst triggered (2 damage), toxicity reset.")
+
+func _spawn_reinforcements(count: int) -> void:
+	var clamped_count := maxi(count, 0)
+	if clamped_count == 0:
+		return
+	var player_pos: Vector2 = INVALID_POS
+	var player := get_tree().get_first_node_in_group("player")
+	if player is Node3D:
+		var p3: Vector3 = (player as Node3D).global_position
+		player_pos = Vector2(p3.x, p3.z)
+	var existing_enemies := get_tree().get_nodes_in_group("enemy")
+	var occupied: Array[Vector2] = []
+	for enemy in existing_enemies:
+		if enemy is Node3D:
+			var ep: Vector3 = (enemy as Node3D).global_position
+			occupied.append(Vector2(ep.x, ep.z))
+	var spawned := 0
+	for _i in range(clamped_count):
+		var avoid := occupied.duplicate()
+		if _is_valid_position(player_pos):
+			avoid.append(player_pos)
+		var pos: Vector2 = _pick_position(avoid, min_enemy_spacing, min_player_obstacle_spacing)
+		if not _is_valid_position(pos):
+			continue
+		var enemy := ENEMY_SCENE.instantiate()
+		add_child(enemy)
+		if enemy is Node3D:
+			(enemy as Node3D).global_position = Vector3(pos.x, 0, pos.y)
+		occupied.append(pos)
+		spawned += 1
+		if CombatManager and CombatManager.active_combat:
+			CombatManager.add_actor(enemy)
+	if spawned > 0:
+		print("Pressure: Reinforcements deployed (+%s)." % spawned)
+
+func _get_run_controller() -> Node:
+	var tree := get_tree()
+	if not tree:
+		return null
+	return tree.root.get_node_or_null("RunController")
 
 func _build_navigation() -> void:
 	# Navigation mesh not used — pathfinding is handled by AStarGrid2D.

@@ -17,6 +17,14 @@ Strategic change:
 - Enemy turn behavior and basic ranged logic are functional.
 - Threat, damage feedback, and combat overlays are implemented.
 
+### Mission Run and Pressure (First Pass Implemented)
+- Added `RunController` singleton with run states: deploy, encounter, extraction, results.
+- Main scene now boots into run flow and enters encounter state through run control.
+- Pressure thresholds now trigger concrete outcomes:
+  - Alert Level thresholds spawn reinforcement enemies.
+  - Toxicity Load thresholds apply movement AP penalty and toxic burst damage/reset.
+- HUD now shows upcoming pressure effects for Alert Level and Toxicity Load.
+
 ### Encounter Systems (Working / Partial)
 - Procedural combat space with buildings and blockers.
 - Hazard actors (steam vents) and resource pickups (mutagenic cells).
