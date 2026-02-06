@@ -1,167 +1,92 @@
 extends CanvasLayer
 
-@onready var mode_label: Label = $MarginContainer/VBoxContainer/ModeLabel
-@onready var actor_label: Label = $MarginContainer/VBoxContainer/ActorLabel
-@onready var ap_label: Label = $MarginContainer/VBoxContainer/APLabel
-@onready var player_hp_label: Label = $MarginContainer/VBoxContainer/PlayerHPLabel
-@onready var damage_taken_label: Label = $MarginContainer/VBoxContainer/DamageTakenLabel
-@onready var stance_label: Label = $MarginContainer/VBoxContainer/StanceLabel
-@onready var control_label: Label = $MarginContainer/VBoxContainer/ControlLabel
-@onready var state_label: Label = $MarginContainer/VBoxContainer/StateLabel
-@onready var enemy_hp_label: Label = $MarginContainer/VBoxContainer/EnemyHPLabel
-@onready var damage_label: Label = $MarginContainer/VBoxContainer/DamageLabel
-@onready var range_label: Label = $MarginContainer/VBoxContainer/RangeLabel
-@onready var attack_label: Label = $MarginContainer/VBoxContainer/AttackLabel
-@onready var cells_label: Label = $MarginContainer/VBoxContainer/CellsLabel
-@onready var alert_level_label: Label = $MarginContainer/VBoxContainer/AlertLevelLabel
-@onready var toxicity_load_label: Label = $MarginContainer/VBoxContainer/ToxicityLoadLabel
-@onready var alert_effect_label: Label = $MarginContainer/VBoxContainer/AlertEffectLabel
-@onready var toxicity_effect_label: Label = $MarginContainer/VBoxContainer/ToxicityEffectLabel
+const RUN_STATE_IDLE := 0
+const RUN_STATE_DEPLOY := 1
+const RUN_STATE_ENCOUNTER := 2
+const RUN_STATE_EXTRACTION := 3
+const RUN_STATE_RESULTS := 4
+
+@onready var status_line_label: Label = $MarginContainer/PanelContainer/VBoxContainer/StatusLineLabel
+@onready var pressure_line_label: Label = $MarginContainer/PanelContainer/VBoxContainer/PressureLineLabel
 
 func _ready() -> void:
-	_refresh_mode()
-	_refresh_actor()
-	_refresh_controls()
-	_refresh_state()
-	_refresh_pressure()
 	if GameMode:
-		GameMode.mode_changed.connect(_on_mode_changed)
+		GameMode.mode_changed.connect(_on_state_changed)
 	if CombatManager:
 		CombatManager.turn_started.connect(_on_turn_changed)
 		CombatManager.turn_ended.connect(_on_turn_changed)
-		CombatManager.combat_started.connect(_on_combat_started)
-		CombatManager.combat_ended.connect(_on_combat_ended)
+		CombatManager.combat_started.connect(_on_combat_changed)
+		CombatManager.combat_ended.connect(_on_combat_changed)
+	var run_controller := _get_run_controller()
+	if run_controller:
+		run_controller.run_state_changed.connect(_on_state_changed)
+	_refresh_lines()
 
 func _process(_delta: float) -> void:
-	_refresh_ap()
-	_refresh_state()
-	_refresh_enemy_status()
-	_refresh_player_status()
-	_refresh_pressure()
+	_refresh_lines()
 
-func _on_mode_changed(_new_mode: int, _previous_mode: int) -> void:
-	_refresh_mode()
-
-func _on_combat_started(_actors: Array) -> void:
-	_refresh_actor()
-	_refresh_state()
-	_refresh_enemy_status()
-
-func _on_combat_ended() -> void:
-	_refresh_actor()
-	_refresh_ap()
-	_refresh_state()
-	_refresh_enemy_status()
+func _on_state_changed(_a: Variant, _b: Variant) -> void:
+	_refresh_lines()
 
 func _on_turn_changed(_actor: Node) -> void:
-	_refresh_actor()
-	_refresh_ap()
-	_refresh_state()
-	_refresh_enemy_status()
+	_refresh_lines()
 
-func _refresh_mode() -> void:
-	var mode_name := "Unknown"
-	if GameMode:
-		mode_name = str(GameMode.Mode.find_key(GameMode.current_mode))
-	mode_label.text = "Mode: %s" % mode_name
+func _on_combat_changed(_actors: Array = []) -> void:
+	_refresh_lines()
 
-func _refresh_actor() -> void:
+func _refresh_lines() -> void:
+	_refresh_status_line()
+	_refresh_pressure_line()
+
+func _refresh_status_line() -> void:
+	var run_text := "Run:-"
+	var run_controller := _get_run_controller()
+	if run_controller:
+		run_text = "Run:%s" % _run_state_to_text(int(run_controller.current_state))
+
+	var turn_text := "Turn:-"
+	var ap_text := "AP:-"
 	var actor: Node = CombatManager.get_current_actor() if CombatManager else null
-	actor_label.text = "Turn: %s" % (actor.name if actor else "None")
+	if actor:
+		turn_text = "Turn:%s" % actor.name
+		if actor.has_method("get_current_ap"):
+			ap_text = "AP:%s" % actor.get_current_ap()
 
-func _refresh_ap() -> void:
-	var actor: Node = CombatManager.get_current_actor() if CombatManager else null
-	if actor and actor.has_method("get_current_ap"):
-		ap_label.text = "AP: %s" % str(actor.get_current_ap())
-	else:
-		ap_label.text = "AP: -"
-
-func _refresh_player_status() -> void:
+	var hp_text := "HP:-"
+	var cells_text := "Cells:-"
 	var player: Node = get_tree().get_first_node_in_group("player")
 	if player and player.has_method("get_current_hp") and player.has_method("get_max_hp"):
-		player_hp_label.text = "Player HP: %s/%s" % [player.get_current_hp(), player.get_max_hp()]
-	else:
-		player_hp_label.text = "Player HP: -"
-	if player and player.has_method("get_last_damage_taken") and player.has_method("get_last_damage_source"):
-		var amount: int = int(player.get_last_damage_taken())
-		var source: String = str(player.get_last_damage_source())
-		damage_taken_label.text = "Last Hit: %s from %s" % [amount, source]
-	else:
-		damage_taken_label.text = "Last Hit: -"
-	if player and player.has_method("get_stance_name") and player.has_method("is_disengage_active"):
-		var disengage_on: bool = bool(player.is_disengage_active())
-		var status: String = "ON" if disengage_on else "OFF"
-		stance_label.text = "Stance: %s | Disengage: %s" % [player.get_stance_name(), status]
-	else:
-		stance_label.text = "Stance: -"
+		hp_text = "HP:%s/%s" % [player.get_current_hp(), player.get_max_hp()]
 	if player and player.has_method("get_mutagenic_cells"):
-		cells_label.text = "Cells: %s" % player.get_mutagenic_cells()
-	else:
-		cells_label.text = "Cells: -"
+		cells_text = "Cells:%s" % player.get_mutagenic_cells()
 
-func _refresh_controls() -> void:
-	var move_keys := "Move=LMB Click"
-	var attack_keys := "Melee=F/LMB"
-	var ranged_keys := "Ranged=R/LMB"
-	var end_turn_keys := "End Turn=Space"
-	var stance_keys := "Stance=Q  Disengage=E"
-	control_label.text = "Controls: %s  %s  %s  %s  %s" % [move_keys, attack_keys, ranged_keys, end_turn_keys, stance_keys]
-
-func _refresh_state() -> void:
-	var actor: Node = CombatManager.get_current_actor() if CombatManager else null
-	var combat_active: bool = CombatManager.active_combat if CombatManager else false
-	var actor_name: String = actor.name if actor else "None"
-	var ap_costs: String = ""
-	if CombatManager:
-		ap_costs = "AP Costs: Move %s | Melee %s | Ranged %s | Ability %s" % [
-			CombatManager.get_ap_cost("move"),
-			CombatManager.get_ap_cost("attack"),
-			CombatManager.get_ap_cost("ranged_attack"),
-			CombatManager.get_ap_cost("ability")
-		]
-	var actor_state := "Actor: %s" % actor_name
-	var combat_state := "Combat: %s" % ("Active" if combat_active else "Idle")
-	state_label.text = "%s  %s  %s" % [combat_state, actor_state, ap_costs]
-
-func _refresh_pressure() -> void:
-	if CombatManager and CombatManager.alert_level:
-		alert_level_label.text = CombatManager.alert_level.to_display()
-		alert_effect_label.text = "Alert Effect: %s" % CombatManager.describe_next_alert_effect()
-	else:
-		alert_level_label.text = "Alert Level: -"
-		alert_effect_label.text = "Alert Effect: -"
-	if CombatManager and CombatManager.toxicity_load:
-		toxicity_load_label.text = CombatManager.toxicity_load.to_display()
-		toxicity_effect_label.text = "Toxicity Effect: %s" % CombatManager.describe_next_toxicity_effect()
-	else:
-		toxicity_load_label.text = "Toxicity Load: -"
-		toxicity_effect_label.text = "Toxicity Effect: -"
-
-func _refresh_enemy_status() -> void:
-	var player: Node = get_tree().get_first_node_in_group("player")
-	var enemy: Node = _get_nearest_enemy()
+	var threat_text := "Threat:-"
+	var enemy := _get_nearest_enemy()
 	if enemy and enemy.has_method("get_current_hp") and enemy.has_method("get_max_hp"):
-		enemy_hp_label.text = "Enemy HP: %s/%s" % [enemy.get_current_hp(), enemy.get_max_hp()]
-	else:
-		enemy_hp_label.text = "Enemy HP: -"
-	var actor: Node = CombatManager.get_current_actor() if CombatManager else null
-	if actor and actor.has_method("get_last_damage_dealt"):
-		damage_label.text = "Last Damage: %s" % actor.get_last_damage_dealt()
-	else:
-		damage_label.text = "Last Damage: -"
-	if player and enemy:
-		var distance: float = Vector2(player.global_position.x, player.global_position.z).distance_to(
-			Vector2(enemy.global_position.x, enemy.global_position.z)
-		)
-		var contact_distance: float = player.get_attack_contact_distance() if player.has_method("get_attack_contact_distance") else 0.0
-		var ranged_distance: float = player.get_ranged_attack_range() if player.has_method("get_ranged_attack_range") else 0.0
-		range_label.text = "Range: %.1f | Melee %.1f | Ranged %.1f" % [distance, contact_distance, ranged_distance]
-	else:
-		range_label.text = "Range: -"
-	if player and player.has_method("get_last_attack_result"):
-		attack_label.text = "Attack: %s" % player.get_last_attack_result()
-	else:
-		attack_label.text = "Attack: -"
+		threat_text = "Threat:%s/%s" % [enemy.get_current_hp(), enemy.get_max_hp()]
+		if player:
+			var distance: float = Vector2(player.global_position.x, player.global_position.z).distance_to(
+				Vector2(enemy.global_position.x, enemy.global_position.z)
+			)
+			threat_text += " @%.0f" % distance
+
+	status_line_label.text = "%s | %s | %s | %s | %s | %s" % [run_text, turn_text, ap_text, hp_text, cells_text, threat_text]
+
+func _refresh_pressure_line() -> void:
+	if not CombatManager or not CombatManager.alert_level or not CombatManager.toxicity_load:
+		pressure_line_label.text = "Alert:- | Toxicity:-"
+		return
+
+	var alert_effect := CombatManager.describe_next_alert_effect().replace("Next: ", "")
+	var toxicity_effect := CombatManager.describe_next_toxicity_effect().replace("Next: ", "")
+	pressure_line_label.text = "Alert:%s/%s (%s) | Toxicity:%s/%s (%s)" % [
+		CombatManager.alert_level.progress,
+		CombatManager.alert_level.segments,
+		alert_effect,
+		CombatManager.toxicity_load.progress,
+		CombatManager.toxicity_load.segments,
+		toxicity_effect
+	]
 
 func _get_nearest_enemy() -> Node:
 	var player := get_tree().get_first_node_in_group("player")
@@ -178,3 +103,24 @@ func _get_nearest_enemy() -> Node:
 			best_distance = distance
 			best_target = enemy
 	return best_target
+
+func _get_run_controller() -> Node:
+	var tree := get_tree()
+	if not tree:
+		return null
+	return tree.root.get_node_or_null("RunController")
+
+func _run_state_to_text(state: int) -> String:
+	match state:
+		RUN_STATE_IDLE:
+			return "Idle"
+		RUN_STATE_DEPLOY:
+			return "Deploy"
+		RUN_STATE_ENCOUNTER:
+			return "Encounter"
+		RUN_STATE_EXTRACTION:
+			return "Extraction"
+		RUN_STATE_RESULTS:
+			return "Results"
+		_:
+			return "Unknown"

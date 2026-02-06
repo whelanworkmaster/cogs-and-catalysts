@@ -7,66 +7,23 @@ script = ExtResource("1_6q1q3")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 anchor_left = 0.0
-anchor_top = 0.0
-anchor_right = 0.0
-anchor_bottom = 0.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
 offset_left = 12.0
-offset_top = 12.0
-offset_right = 280.0
-offset_bottom = 180.0
+offset_top = -86.0
+offset_right = -12.0
+offset_bottom = -12.0
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+[node name="PanelContainer" type="PanelContainer" parent="MarginContainer"]
 
-[node name="ControlLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Controls: Move=Arrows/WASD  Attack=F  End Turn=Space"
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/PanelContainer"]
+theme_override_constants/separation = 4
 
-[node name="ModeLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Mode: Unknown"
+[node name="StatusLineLabel" type="Label" parent="MarginContainer/PanelContainer/VBoxContainer"]
+text = "Run:- | Turn:- | AP:- | HP:- | Cells:- | Threat:-"
+autowrap_mode = 2
 
-[node name="ActorLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Turn: None"
-
-[node name="APLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "AP: -"
-
-[node name="PlayerHPLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Player HP: -"
-
-[node name="DamageTakenLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Last Hit: -"
-
-[node name="StanceLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Stance: -"
-
-[node name="StateLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "State: -"
-
-[node name="EnemyHPLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Enemy HP: -"
-
-[node name="DamageLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Last Damage: -"
-
-[node name="RangeLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Range: -"
-
-[node name="AttackLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Attack: -"
-
-[node name="CellsLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Cells: -"
-
-[node name="PressureTitle" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Pressure"
-
-[node name="AlertLevelLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Alert Level: 0/4"
-
-[node name="ToxicityLoadLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Toxicity Load: 0/4"
-
-[node name="AlertEffectLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Alert Effect: -"
-
-[node name="ToxicityEffectLabel" type="Label" parent="MarginContainer/VBoxContainer"]
-text = "Toxicity Effect: -"
+[node name="PressureLineLabel" type="Label" parent="MarginContainer/PanelContainer/VBoxContainer"]
+text = "Alert:- | Toxicity:-"
+autowrap_mode = 2
