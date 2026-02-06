@@ -13,6 +13,7 @@ var current_actor_index: int = -1
 
 @export var move_ap_cost: int = 1
 @export var attack_ap_cost: int = 3
+@export var ranged_attack_ap_cost: int = 4
 @export var ability_ap_cost: int = 2
 
 const Clock = preload("res://scripts/systems/clock.gd")
@@ -79,6 +80,8 @@ func get_ap_cost(action: StringName) -> int:
 			return move_ap_cost
 		"attack":
 			return attack_ap_cost
+		"ranged_attack":
+			return ranged_attack_ap_cost
 		"ability":
 			return ability_ap_cost
 		_:

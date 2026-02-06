@@ -98,11 +98,12 @@ func _refresh_player_status() -> void:
 		cells_label.text = "Cells: -"
 
 func _refresh_controls() -> void:
-	var move_keys := "Move=Arrows/WASD"
-	var attack_keys := "Attack=F/LMB"
+	var move_keys := "Move=LMB Click"
+	var attack_keys := "Melee=F/LMB"
+	var ranged_keys := "Ranged=R/LMB"
 	var end_turn_keys := "End Turn=Space"
 	var stance_keys := "Stance=Q  Disengage=E"
-	control_label.text = "Controls: %s  %s  %s  %s" % [move_keys, attack_keys, end_turn_keys, stance_keys]
+	control_label.text = "Controls: %s  %s  %s  %s  %s" % [move_keys, attack_keys, ranged_keys, end_turn_keys, stance_keys]
 
 func _refresh_state() -> void:
 	var actor: Node = CombatManager.get_current_actor() if CombatManager else null
@@ -110,9 +111,10 @@ func _refresh_state() -> void:
 	var actor_name: String = actor.name if actor else "None"
 	var ap_costs: String = ""
 	if CombatManager:
-		ap_costs = "AP Costs: Move %s | Attack %s | Ability %s" % [
+		ap_costs = "AP Costs: Move %s | Melee %s | Ranged %s | Ability %s" % [
 			CombatManager.get_ap_cost("move"),
 			CombatManager.get_ap_cost("attack"),
+			CombatManager.get_ap_cost("ranged_attack"),
 			CombatManager.get_ap_cost("ability")
 		]
 	var actor_state := "Actor: %s" % actor_name
@@ -142,9 +144,12 @@ func _refresh_enemy_status() -> void:
 	else:
 		damage_label.text = "Last Damage: -"
 	if player and enemy:
-		var distance: float = player.global_position.distance_to(enemy.global_position)
+		var distance: float = Vector2(player.global_position.x, player.global_position.z).distance_to(
+			Vector2(enemy.global_position.x, enemy.global_position.z)
+		)
 		var contact_distance: float = player.get_attack_contact_distance() if player.has_method("get_attack_contact_distance") else 0.0
-		range_label.text = "Range: %.1f / %.1f" % [distance, contact_distance]
+		var ranged_distance: float = player.get_ranged_attack_range() if player.has_method("get_ranged_attack_range") else 0.0
+		range_label.text = "Range: %.1f | Melee %.1f | Ranged %.1f" % [distance, contact_distance, ranged_distance]
 	else:
 		range_label.text = "Range: -"
 	if player and player.has_method("get_last_attack_result"):

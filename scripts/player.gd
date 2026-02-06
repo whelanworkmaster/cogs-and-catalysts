@@ -15,6 +15,8 @@ var ap_regen_accumulator: float = 0.0
 @export var combat_step_distance: float = 32.0
 @export var attack_contact_distance: float = 40.0
 @export var attack_damage: int = 3
+@export var ranged_attack_range: float = 240.0
+@export var ranged_attack_damage: int = 2
 var last_damage_dealt: int = 0
 var last_attack_result: String = "-"
 @export var max_hp: int = 12
@@ -115,16 +117,30 @@ func _physics_process(_delta):
 	handle_stance_input()
 	handle_turn_input()
 	handle_attack_input()
+	handle_ranged_attack_input()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _is_dead:
 		return
 	if event is InputEventMouseMotion:
-		_update_path_preview(event.position)
+		_update_hover_preview(event.position)
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed:
 			_handle_click(mb.position)
+
+func _update_hover_preview(screen_pos: Vector2) -> void:
+	var in_combat := CombatManager and CombatManager.active_combat
+	if in_combat and CombatManager.get_current_actor() == self:
+		var ground_result: Variant = _screen_to_ground(screen_pos)
+		if ground_result != null:
+			var ground_pos: Vector3 = ground_result as Vector3
+			var hovered_enemy := _find_enemy_at_position(ground_pos)
+			if hovered_enemy:
+				_clear_path_preview()
+				_show_enemy_hover_attack_preview(hovered_enemy, screen_pos)
+				return
+	_update_path_preview(screen_pos)
 
 func _handle_click(screen_pos: Vector2) -> void:
 	if _is_moving:
@@ -140,7 +156,10 @@ func _handle_click(screen_pos: Vector2) -> void:
 	if in_combat:
 		var clicked_enemy := _find_enemy_at_position(ground_pos)
 		if clicked_enemy:
-			_attack_target(clicked_enemy)
+			if _can_attack_melee(clicked_enemy):
+				_attack_target(clicked_enemy)
+			else:
+				_ranged_attack_target(clicked_enemy)
 			return
 	# Get A* path to clicked position
 	var world := get_tree().current_scene
@@ -265,6 +284,46 @@ func _clear_path_preview() -> void:
 		if grid and grid.has_method("clear_path_preview"):
 			grid.clear_path_preview()
 
+func _show_enemy_hover_attack_preview(enemy: Node, screen_pos: Vector2) -> void:
+	if not _ap_cost_label:
+		return
+	var melee_cost := _get_ap_cost("attack")
+	var ranged_cost := _get_ap_cost("ranged_attack")
+	var can_melee := _can_attack_melee(enemy)
+	var can_ranged := _can_attack_ranged(enemy)
+	var affordable := false
+	var valid_attack := false
+	if can_melee:
+		_ap_cost_label.text = "LMB: Melee (%d AP)" % melee_cost
+		affordable = current_ap >= melee_cost
+		valid_attack = true
+	elif can_ranged:
+		_ap_cost_label.text = "LMB: Ranged (%d AP)" % ranged_cost
+		affordable = current_ap >= ranged_cost
+		valid_attack = true
+	else:
+		var same_elevation := true
+		if enemy.has_method("get_elevation_level"):
+			same_elevation = enemy.get_elevation_level() == current_elevation
+		var in_ranged_distance := _xz_distance_to(enemy.global_position) <= ranged_attack_range
+		if not same_elevation:
+			_ap_cost_label.text = "No attack (Elevation)"
+		elif in_ranged_distance:
+			_ap_cost_label.text = "LMB: Ranged (%d AP) - Blocked" % ranged_cost
+		else:
+			_ap_cost_label.text = "LMB: Ranged (%d AP) - Out of range" % ranged_cost
+		affordable = current_ap >= ranged_cost
+	if valid_attack and affordable:
+		_ap_cost_label.add_theme_color_override("font_color", Color(0.45, 1.0, 0.45))
+	elif valid_attack and not affordable:
+		_ap_cost_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	elif affordable:
+		_ap_cost_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+	else:
+		_ap_cost_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	_ap_cost_label.position = screen_pos + Vector2(16, -24)
+	_ap_cost_label.visible = true
+
 func _screen_to_ground(screen_pos: Vector2) -> Variant:
 	var camera := get_viewport().get_camera_3d()
 	if not camera:
@@ -284,7 +343,7 @@ func _find_enemy_at_position(world_pos: Vector3) -> Node:
 	var best_enemy: Node = null
 	var best_dist := INF
 	for enemy in enemies:
-		if not enemy is Node3D:
+		if not (enemy is Node3D):
 			continue
 		var dist := _xz_distance(world_pos, enemy.global_position)
 		# Click within one grid cell of the enemy counts as clicking on them
@@ -301,13 +360,12 @@ func _attack_target(target: Node) -> void:
 	if CombatManager.get_current_actor() != self:
 		return
 	# Check if target is in attack range
-	if not target is Node3D:
+	if not (target is Node3D):
 		return
-	var dist := _xz_distance_to(target.global_position)
-	if dist > attack_contact_distance:
+	if not _can_attack_melee(target):
 		last_attack_result = "Target out of range"
 		last_damage_dealt = 0
-		print("Attack failed: target out of range (distance: ", dist, ")")
+		print("Attack failed: melee target out of range.")
 		return
 	if not spend_ap(_get_ap_cost("attack")):
 		last_attack_result = "Not enough AP"
@@ -328,6 +386,54 @@ func _attack_target(target: Node) -> void:
 		last_damage_dealt = damage
 		last_attack_result = "Hit for %s" % damage
 		print("Attack hit for ", damage)
+		if current_stance == Stance.AGGRESS:
+			_tick_detection()
+		_tick_detection()
+
+func _ranged_attack_target(target: Node) -> void:
+	if _is_dead:
+		return
+	if not CombatManager or not CombatManager.active_combat:
+		return
+	if CombatManager.get_current_actor() != self:
+		return
+	if not (target is Node3D):
+		return
+	if target.has_method("get_elevation_level") and target.get_elevation_level() != current_elevation:
+		last_attack_result = "Different elevation"
+		last_damage_dealt = 0
+		print("Ranged attack failed: elevation mismatch.")
+		return
+	var dist := _xz_distance_to(target.global_position)
+	if dist > ranged_attack_range:
+		last_attack_result = "Target out of range"
+		last_damage_dealt = 0
+		print("Ranged attack failed: target out of range (distance: ", dist, ")")
+		return
+	if not _has_clear_shot(target):
+		last_attack_result = "Shot blocked"
+		last_damage_dealt = 0
+		print("Ranged attack failed: line of sight blocked.")
+		return
+	if not spend_ap(_get_ap_cost("ranged_attack")):
+		last_attack_result = "Not enough AP"
+		last_damage_dealt = 0
+		print("Ranged attack failed: not enough AP.")
+		return
+	var target_3d := target as Node3D
+	var dir: Vector3 = (target_3d.global_position - global_position).normalized()
+	dir.y = 0
+	if dir.length_squared() > 0.001:
+		_facing_direction = dir
+		_update_facing_indicator()
+	_spawn_ranged_shot_line(target_3d.global_position)
+	if target.has_method("take_damage"):
+		var damage := ranged_attack_damage + _get_attack_damage_bonus()
+		damage = max(damage, 0)
+		target.take_damage(damage, self)
+		last_damage_dealt = damage
+		last_attack_result = "Ranged hit for %s" % damage
+		print("Ranged attack hit for ", damage)
 		if current_stance == Stance.AGGRESS:
 			_tick_detection()
 		_tick_detection()
@@ -356,11 +462,31 @@ func handle_attack_input() -> void:
 	print("Attack input detected (F key).")
 	var target := _find_attack_target()
 	if not target:
-		last_attack_result = "No target in range"
+		last_attack_result = "No melee target in range"
 		last_damage_dealt = 0
 		print("Attack failed: no target in range.")
 		return
 	_attack_target(target)
+
+func handle_ranged_attack_input() -> void:
+	if _is_dead:
+		return
+	if not CombatManager:
+		return
+	if not CombatManager.active_combat:
+		return
+	if CombatManager.get_current_actor() != self:
+		return
+	if not Input.is_action_just_pressed("ranged_attack"):
+		return
+	print("Ranged attack input detected (R key).")
+	var target := _find_ranged_attack_target()
+	if not target:
+		last_attack_result = "No ranged target"
+		last_damage_dealt = 0
+		print("Ranged attack failed: no target in range or line-of-sight.")
+		return
+	_ranged_attack_target(target)
 
 func spend_ap(amount: int) -> bool:
 	if current_ap >= amount:
@@ -419,11 +545,29 @@ func _find_attack_target() -> Node:
 			best_target = body
 	return best_target
 
+func _find_ranged_attack_target() -> Node:
+	var enemies := get_tree().get_nodes_in_group("enemy")
+	var best_target: Node = null
+	var best_distance := INF
+	for enemy in enemies:
+		if enemy == null or not (enemy is Node3D):
+			continue
+		if not _can_attack_ranged(enemy):
+			continue
+		var distance := _xz_distance_to(enemy.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best_target = enemy
+	return best_target
+
 func get_last_damage_dealt() -> int:
 	return last_damage_dealt
 
 func get_attack_contact_distance() -> float:
 	return attack_contact_distance
+
+func get_ranged_attack_range() -> float:
+	return ranged_attack_range
 
 func get_last_attack_result() -> String:
 	return last_attack_result
@@ -489,6 +633,13 @@ func _ensure_input_actions() -> void:
 		disengage_event.keycode = KEY_E
 		disengage_event.physical_keycode = KEY_E
 		InputMap.action_add_event("disengage", disengage_event)
+	if not InputMap.has_action("ranged_attack"):
+		InputMap.add_action("ranged_attack")
+	var ranged_event := InputEventKey.new()
+	ranged_event.keycode = KEY_R
+	ranged_event.physical_keycode = KEY_R
+	if not InputMap.action_has_event("ranged_attack", ranged_event):
+		InputMap.action_add_event("ranged_attack", ranged_event)
 
 func _on_turn_started(actor: Node) -> void:
 	if actor == self:
@@ -671,6 +822,51 @@ func _spawn_damage_popup(amount: int, color: Color) -> void:
 	popup.color = color
 	popup.global_position = screen_pos
 	scene.add_child(popup)
+
+func _spawn_ranged_shot_line(target_pos: Vector3) -> void:
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	var mesh_instance := MeshInstance3D.new()
+	var im := ImmediateMesh.new()
+	mesh_instance.mesh = im
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.3, 0.8, 1.0, 0.9)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.no_depth_test = true
+	mesh_instance.material_override = mat
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	im.surface_add_vertex(global_position + Vector3(0, 16, 0))
+	im.surface_add_vertex(target_pos + Vector3(0, 16, 0))
+	im.surface_end()
+	scene.add_child(mesh_instance)
+	var tween := create_tween()
+	tween.tween_property(mat, "albedo_color:a", 0.0, 0.12)
+	tween.tween_callback(mesh_instance.queue_free)
+
+func _can_attack_melee(target: Node) -> bool:
+	if not (target is Node3D):
+		return false
+	if target.has_method("get_elevation_level") and target.get_elevation_level() != current_elevation:
+		return false
+	var dist := _xz_distance_to(target.global_position)
+	return dist <= attack_contact_distance
+
+func _can_attack_ranged(target: Node) -> bool:
+	if not (target is Node3D):
+		return false
+	if target.has_method("get_elevation_level") and target.get_elevation_level() != current_elevation:
+		return false
+	if _xz_distance_to(target.global_position) > ranged_attack_range:
+		return false
+	return _has_clear_shot(target)
+
+func _has_clear_shot(target: Node) -> bool:
+	var world := get_tree().current_scene
+	if world and world.has_method("has_clear_los"):
+		return world.has_clear_los(global_position, target.global_position)
+	return true
 
 func _xz_distance_to(target: Vector3) -> float:
 	var a := Vector2(global_position.x, global_position.z)
