@@ -34,6 +34,9 @@ Strategic change:
 - Added camera follow handoff when switching active Vessel.
 - Fixed same-frame double switch input bounce using a combat-frame input guard.
 - Fixed movement path preview conflicts so inactive Vessels no longer clear active preview lines.
+- Added multi-unit HUD squad panel with per-Vessel HP/AP snapshot and active/turn markers.
+- Added UI click switching between Vessels during player turns.
+- Added end-turn AP confirmation flow (`Space` warns first, second press confirms).
 
 ### Encounter Systems (Working / Partial)
 - Procedural combat space with buildings and blockers.

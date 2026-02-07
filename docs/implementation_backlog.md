@@ -1,6 +1,6 @@
 # Implementation Backlog - Cogs & Catalyst
 
-Last updated: 2026-02-06
+Last updated: 2026-02-07
 Source alignment:
 - `docs/designbible.md`
 - `docs/currentprogress.md`
@@ -12,7 +12,7 @@ Source alignment:
 
 ## Milestones
 1. ~~M1 - Mission Run Skeleton~~ (First pass complete)
-2. M2 - Squad Control + Multi-Unit Combat UX (In progress)
+2. ~~M2 - Squad Control + Multi-Unit Combat UX~~ (First pass complete)
 3. M3 - Encounter Depth (Enemy Roles + Hazard Combos)
 4. M4 - Run Progression + Unlocks
 5. M5 - Mercury Vault Vertical Slice
@@ -75,10 +75,10 @@ Source alignment:
 - Turn order includes all friendly units and enemies.
 - Enemy AI can select valid squad targets.
 
-### B004 - Multi-Unit Combat UI
+### ~~B004 - Multi-Unit Combat UI~~
 - Priority: P0
 - Milestone: M2
-- Status: In progress (partial) on 2026-02-06
+- Status: Completed (first pass) on 2026-02-07
 - Outcome: UI clearly supports active unit context.
 - Implementation:
 - Add squad panel for unit selection and AP snapshot.
@@ -86,9 +86,12 @@ Source alignment:
 - Preserve existing threat and damage indicators.
 - First-pass implementation notes:
 - Added active Vessel switching during player turns (`Tab` / fallback `C`).
+- Added UI squad panel with per-unit HP/AP snapshot and active/turn markers.
+- Added click-to-switch handoff from squad panel with camera follow handoff.
 - Added camera handoff when switching active Vessel.
 - Added combat-frame input guard to prevent double-switch bounce.
 - Refactored HUD into compact bottom overlay and reduced clutter.
+- Added AP-aware end-turn guard (`Space` warns first, confirms on second press).
 - Target files:
 - `scripts/ui/combat_hud.gd`
 - `scripts/ui/combat_overlay.gd`

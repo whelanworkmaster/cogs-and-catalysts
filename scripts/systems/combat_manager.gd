@@ -13,6 +13,7 @@ var active_combat: bool = false
 var actors: Array = []
 var current_actor_index: int = -1
 var _last_actor_switch_frame: int = -1
+var _actors_started_this_turn: Dictionary = {}
 
 @export var move_ap_cost: int = 1
 @export var attack_ap_cost: int = 3
@@ -42,6 +43,7 @@ func start_combat(combat_actors: Array) -> void:
 			continue
 		actors.append(actor)
 	current_actor_index = -1
+	_actors_started_this_turn.clear()
 	GameMode.set_mode(GameMode.Mode.TURN_COMBAT)
 	combat_started.emit(actors)
 	tick_alert_level(1)
@@ -74,6 +76,28 @@ func set_current_actor(actor: Node) -> bool:
 	if actor.has_method("get_current_hp") and actor.get_current_hp() <= 0:
 		return false
 	current_actor_index = index
+	return true
+
+func handoff_turn_to(actor: Node) -> bool:
+	if not active_combat:
+		return false
+	if actor == null:
+		return false
+	var current_actor := get_current_actor()
+	if current_actor == null:
+		return false
+	if actor == current_actor:
+		return false
+	if not current_actor.is_in_group("player") or not actor.is_in_group("player"):
+		return false
+	var index := actors.find(actor)
+	if index == -1:
+		return false
+	if actor.has_method("get_current_hp") and actor.get_current_hp() <= 0:
+		return false
+	turn_ended.emit(current_actor)
+	current_actor_index = index
+	_emit_turn_started_once(actor)
 	return true
 
 func can_process_actor_switch_input() -> bool:
@@ -189,15 +213,25 @@ func _next_turn() -> void:
 	if actors.is_empty():
 		end_combat()
 		return
+	_actors_started_this_turn.clear()
 	var attempts := 0
 	while attempts < actors.size():
 		current_actor_index = (current_actor_index + 1) % actors.size()
 		var actor: Node = actors[current_actor_index] as Node
 		if _is_actor_turn_valid(actor):
-			turn_started.emit(actor)
+			_emit_turn_started_once(actor)
 			return
 		attempts += 1
 	end_combat()
+
+func _emit_turn_started_once(actor: Node) -> void:
+	if actor == null:
+		return
+	var actor_id := actor.get_instance_id()
+	if _actors_started_this_turn.has(actor_id):
+		return
+	_actors_started_this_turn[actor_id] = true
+	turn_started.emit(actor)
 
 func _emit_alert_thresholds(previous_progress: int, new_progress: int) -> void:
 	for threshold in alert_thresholds:

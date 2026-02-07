@@ -27,3 +27,22 @@ autowrap_mode = 2
 [node name="PressureLineLabel" type="Label" parent="MarginContainer/PanelContainer/VBoxContainer"]
 text = "Alert:- | Toxicity:-"
 autowrap_mode = 2
+
+[node name="SquadList" type="HBoxContainer" parent="MarginContainer/PanelContainer/VBoxContainer"]
+theme_override_constants/separation = 6
+
+[node name="NoticeMargin" type="MarginContainer" parent="."]
+anchor_left = 0.25
+anchor_top = 1.0
+anchor_right = 0.75
+anchor_bottom = 1.0
+offset_top = -140.0
+offset_bottom = -102.0
+
+[node name="NoticePanel" type="PanelContainer" parent="NoticeMargin"]
+
+[node name="NoticeLabel" type="Label" parent="NoticeMargin/NoticePanel"]
+visible = false
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 2

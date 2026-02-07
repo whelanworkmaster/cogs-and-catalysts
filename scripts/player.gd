@@ -27,6 +27,7 @@ var mutagenic_cells: int = 0
 var _hit_tween: Tween
 var _death_tween: Tween
 var _is_dead: bool = false
+var _end_turn_confirm_pending: bool = false
 
 enum Stance { NEUTRAL, GUARD, AGGRESS, EVADE }
 @export var stance_ap_cost: int = 1
@@ -457,12 +458,26 @@ func handle_turn_input():
 	if CombatManager.get_current_actor() != self:
 		return
 	if Input.is_action_just_pressed("next_vessel"):
+		_end_turn_confirm_pending = false
 		if CombatManager and not CombatManager.can_process_actor_switch_input():
 			return
 		print("Switch input detected on ", name)
-		_switch_to_next_vessel()
+		if not _switch_to_next_vessel():
+			_show_hud_notice("No other available Vessel to switch to.")
 		return
 	if Input.is_action_just_pressed("end_turn") or Input.is_action_just_pressed("ui_accept"):
+		if current_ap > 0:
+			if _end_turn_confirm_pending:
+				_end_turn_confirm_pending = false
+				CombatManager.end_turn()
+				return
+			_end_turn_confirm_pending = true
+			_show_hud_notice("AP remains. Press Space again to end turn.")
+			return
+		_end_turn_confirm_pending = false
+		if _switch_to_next_vessel_with_ap():
+			_show_hud_notice("Switched to a Vessel with AP.")
+			return
 		CombatManager.end_turn()
 
 func handle_attack_input() -> void:
@@ -508,6 +523,7 @@ func handle_ranged_attack_input() -> void:
 func spend_ap(amount: int) -> bool:
 	if current_ap >= amount:
 		current_ap -= amount
+		_end_turn_confirm_pending = false
 		print("Spent ", amount, " AP. Remaining: ", current_ap, "/", max_ap)
 		return true
 	else:
@@ -686,6 +702,7 @@ func _ensure_input_actions() -> void:
 
 func _on_turn_started(actor: Node) -> void:
 	if actor == self:
+		_end_turn_confirm_pending = false
 		reset_ap()
 		last_attack_result = "Ready"
 		disengage_active = false
@@ -698,6 +715,7 @@ func _on_combat_started(_actors: Array) -> void:
 	last_attack_result = "Ready"
 
 func _on_combat_ended() -> void:
+	_end_turn_confirm_pending = false
 	last_attack_result = "Not in combat"
 	disengage_active = false
 	_clear_path_preview()
@@ -929,7 +947,7 @@ func _get_squad_manager() -> Node:
 		return null
 	return tree.root.get_node_or_null("SquadManager")
 
-func _switch_to_next_vessel() -> void:
+func _switch_to_next_vessel() -> bool:
 	var squad_manager := _get_squad_manager()
 	var next_vessel: Node = null
 	if squad_manager:
@@ -952,16 +970,54 @@ func _switch_to_next_vessel() -> void:
 		print("Fallback living vessels: ", living.size())
 	if next_vessel == null or next_vessel == self:
 		print("Switch aborted: next vessel invalid or same. current=", name)
-		return
+		return false
 	print("Attempting switch from %s to %s" % [name, next_vessel.name])
-	if not CombatManager or not CombatManager.set_current_actor(next_vessel):
-		print("Switch failed: CombatManager rejected actor.")
-		return
+	if not CombatManager or not CombatManager.handoff_turn_to(next_vessel):
+		print("Switch failed: CombatManager rejected handoff.")
+		return false
 	if squad_manager:
 		squad_manager.set_active_vessel(next_vessel)
 	if next_vessel.has_method("_focus_camera_on_self"):
 		next_vessel.call("_focus_camera_on_self")
 	print("Switch success: now controlling ", next_vessel.name)
+	return true
+
+func _switch_to_next_vessel_with_ap() -> bool:
+	var squad_manager := _get_squad_manager()
+	var living: Array = []
+	if squad_manager:
+		living = squad_manager.get_living_vessels()
+	else:
+		living = get_tree().get_nodes_in_group("player")
+	if living.is_empty():
+		return false
+	var start_index := living.find(self)
+	if start_index == -1:
+		start_index = 0
+	for offset in range(1, living.size() + 1):
+		var candidate: Node = living[(start_index + offset) % living.size()] as Node
+		if candidate == null or candidate == self:
+			continue
+		if not candidate.has_method("get_current_ap"):
+			continue
+		if candidate.get_current_ap() <= 0:
+			continue
+		if not CombatManager or not CombatManager.handoff_turn_to(candidate):
+			continue
+		if squad_manager:
+			squad_manager.set_active_vessel(candidate)
+		if candidate.has_method("_focus_camera_on_self"):
+			candidate.call("_focus_camera_on_self")
+		return true
+	return false
+
+func _show_hud_notice(message: String) -> void:
+	var scene := get_tree().current_scene if get_tree() else null
+	if scene == null:
+		return
+	var hud := scene.get_node_or_null("CombatHUD")
+	if hud and hud.has_method("show_notice"):
+		hud.call("show_notice", message, 1.4)
 
 func _focus_camera_on_self() -> void:
 	var scene := get_tree().current_scene if get_tree() else null
