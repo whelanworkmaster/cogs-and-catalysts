@@ -7,6 +7,12 @@ extends Node3D
 @export var building_count_min: int = 4
 @export var building_count_max: int = 6
 @export var allow_building_spawn: bool = true
+@export var allow_cover_spawn: bool = true
+@export var cover_line_count_min: int = 2
+@export var cover_line_count_max: int = 4
+@export var cover_segments_per_line_min: int = 2
+@export var cover_segments_per_line_max: int = 4
+@export var min_cover_line_spacing: float = 96.0
 @export var vent_count_min: int = 2
 @export var vent_count_max: int = 3
 @export var allow_vent_spawn: bool = true
@@ -23,6 +29,9 @@ extends Node3D
 @export var procgen_seed: int = 0
 @export var procgen_margin: Vector2 = Vector2(80, 80)
 @export var procgen_attempts: int = 50
+@export var procgen_retry_attempts: int = 8
+@export var require_cover_variety: bool = true
+@export var require_full_reachability: bool = true
 @export var nav_bounds_size: Vector2 = Vector2(1200, 840)
 @export var grid_cell_size: Vector2 = Vector2(32, 32)
 var nav_region: Node = null  # NavigationRegion3D placeholder — pathfinding uses AStarGrid2D
@@ -194,7 +203,9 @@ func _build_astar_grid() -> void:
 
 func _mark_rect_solid(rect: Rect2) -> void:
 	var start: Vector2i = _world_to_cell(rect.position)
-	var end: Vector2i = _world_to_cell(rect.position + rect.size)
+	# Use an inclusive max corner so we do not inflate obstacle footprint by one cell.
+	var max_corner := rect.position + rect.size - Vector2(0.001, 0.001)
+	var end: Vector2i = _world_to_cell(max_corner)
 	for y in range(start.y, end.y + 1):
 		for x in range(start.x, end.x + 1):
 			var cell := Vector2i(x, y)
@@ -256,13 +267,27 @@ func _find_nearest_walkable(origin: Vector2i, max_radius: int = 10) -> Vector2i:
 func _setup_procgen() -> void:
 	_grid_origin = Vector2(-nav_bounds_size.x * 0.5, -nav_bounds_size.y * 0.5)
 	_seed_rng()
+	var retries := maxi(procgen_retry_attempts, 1)
+	var accepted := false
 	if debug_procgen:
-		print("Procgen: seed=", procgen_seed, " margin=", procgen_margin, " buildings=", building_count_min, "-", building_count_max, " vents=", vent_count_min, "-", vent_count_max, " enemies=", enemy_count)
-	_randomize_obstacles()
-	_refresh_grid_overlay()
-	_position_players()
-	_spawn_enemies()
-	_randomize_steam_vents()
+		print("Procgen: seed=", procgen_seed, " margin=", procgen_margin, " buildings=", building_count_min, "-", building_count_max, " vents=", vent_count_min, "-", vent_count_max, " enemies=", enemy_count, " retries=", retries)
+	for attempt in range(retries):
+		_randomize_obstacles()
+		_randomize_cover_segments()
+		_refresh_grid_overlay()
+		_position_players()
+		_spawn_enemies()
+		_randomize_steam_vents()
+		_build_astar_grid()
+		if _is_generated_layout_playable():
+			accepted = true
+			if debug_procgen:
+				print("Procgen accepted on attempt ", attempt + 1, "/", retries)
+			break
+		if debug_procgen:
+			print("Procgen rejected on attempt ", attempt + 1, "/", retries)
+	if not accepted and debug_procgen:
+		print("Procgen fallback: keeping best-effort final attempt.")
 
 func _ensure_squad_size() -> void:
 	var desired := maxi(squad_size, 1)
@@ -331,7 +356,7 @@ func _seed_rng() -> void:
 		_rng.randomize()
 
 func _randomize_obstacles() -> void:
-	var obstacles: Array[Node] = _get_nav_obstacles()
+	var obstacles: Array[Node] = _get_building_obstacles()
 	if obstacles.is_empty():
 		if debug_procgen:
 			print("Procgen: no nav_obstacle nodes found.")
@@ -364,6 +389,7 @@ func _randomize_obstacles() -> void:
 				clone.name = "%s_%s" % [template.name, i + 1]
 				add_child(clone)
 		obstacles = _get_nav_obstacles()
+		obstacles = _get_building_obstacles()
 	var placed_rects: Array[Rect2] = []
 	for obstacle in obstacles:
 		var zone := obstacle as Node3D
@@ -383,6 +409,108 @@ func _randomize_obstacles() -> void:
 			placed_rects.append(new_rect)
 		elif debug_procgen:
 			print("Procgen: failed to place obstacle ", zone.name, " size=", rect.size)
+
+func _randomize_cover_segments() -> void:
+	var cover_nodes: Array[Node] = _get_cover_segments_nodes()
+	if cover_nodes.is_empty():
+		if debug_procgen:
+			print("Procgen: no cover nodes found.")
+		return
+	if not allow_cover_spawn:
+		return
+	var line_min := maxi(cover_line_count_min, 0)
+	var line_max := maxi(cover_line_count_max, 0)
+	if line_max < line_min:
+		var temp_lines := line_max
+		line_max = line_min
+		line_min = temp_lines
+	var line_count := _rng.randi_range(line_min, line_max)
+	var segment_min := maxi(cover_segments_per_line_min, 1)
+	var segment_max := maxi(cover_segments_per_line_max, 1)
+	if segment_max < segment_min:
+		var temp_segments := segment_max
+		segment_max = segment_min
+		segment_min = temp_segments
+	var desired_segments := 0
+	var line_lengths: Array[int] = []
+	for _i in range(line_count):
+		var length := _rng.randi_range(segment_min, segment_max)
+		line_lengths.append(length)
+		desired_segments += length
+	_resize_cover_pool(cover_nodes, desired_segments)
+	cover_nodes = _get_cover_segments_nodes()
+	if cover_nodes.size() < desired_segments:
+		desired_segments = cover_nodes.size()
+	var placed_rects: Array[Rect2] = []
+	for obstacle in _get_building_obstacles():
+		var rect := _get_obstacle_rect(obstacle)
+		if rect.size != Vector2.ZERO:
+			placed_rects.append(rect)
+	var line_centers: Array[Vector2] = []
+	var cursor := 0
+	for line_index in range(line_lengths.size()):
+		if cursor >= desired_segments:
+			break
+		var line_length := line_lengths[line_index]
+		var horizontal := _rng.randf() < 0.5
+		var cell_span := float(line_length)
+		var line_size := Vector2(
+			cell_span * grid_cell_size.x if horizontal else grid_cell_size.x,
+			grid_cell_size.y if horizontal else cell_span * grid_cell_size.y
+		)
+		var center := _find_line_center(line_size, placed_rects, line_centers)
+		if not _is_valid_position(center):
+			continue
+		line_centers.append(center)
+		var center_index := 0.5 * float(line_length - 1)
+		for segment_idx in range(line_length):
+			if cursor >= desired_segments:
+				break
+			var offset_cells := float(segment_idx) - center_index
+			var offset := Vector2(offset_cells * grid_cell_size.x, 0.0) if horizontal else Vector2(0.0, offset_cells * grid_cell_size.y)
+			var pos := _snap_to_grid(center + offset)
+			var cover_node := cover_nodes[cursor]
+			cursor += 1
+			if not (cover_node is Node3D):
+				continue
+			var cover_3d := cover_node as Node3D
+			cover_3d.global_position = Vector3(pos.x, 0.0, pos.y)
+			var segment_rect := _get_obstacle_rect(cover_node)
+			if segment_rect.size != Vector2.ZERO:
+				placed_rects.append(segment_rect)
+	for leftover in range(cursor, cover_nodes.size()):
+		var node := cover_nodes[leftover]
+		if node:
+			node.queue_free()
+
+func _resize_cover_pool(covers: Array[Node], desired_count: int) -> void:
+	if covers.is_empty():
+		return
+	var template: Node = covers[0]
+	if desired_count < covers.size():
+		for i in range(desired_count, covers.size()):
+			var extra: Node = covers[i]
+			extra.queue_free()
+	elif desired_count > covers.size():
+		for i in range(desired_count - covers.size()):
+			var clone_any := template.duplicate()
+			if not (clone_any is Node):
+				continue
+			var clone: Node = clone_any
+			clone.name = "%s_%s" % [template.name, i + 1]
+			add_child(clone)
+
+func _find_line_center(line_size: Vector2, placed_rects: Array[Rect2], line_centers: Array[Vector2]) -> Vector2:
+	var attempts := maxi(procgen_attempts, 20)
+	for _i in range(attempts):
+		var center := _snap_to_grid(_random_position_in_bounds_for_size(line_size))
+		var line_rect := Rect2(center - line_size * 0.5, line_size)
+		if _rects_overlap(line_rect, placed_rects, grid_cell_size.x * 0.5):
+			continue
+		if _is_near_points(center, line_centers, min_cover_line_spacing):
+			continue
+		return center
+	return INVALID_POS
 
 func _refresh_grid_overlay() -> void:
 	var grid := get_node_or_null("GridOverlay")
@@ -534,6 +662,56 @@ func _pick_position(avoid_points: Array[Vector2] = [], min_spacing: float = 0.0,
 			best_pos = pos_relaxed
 	return best_pos
 
+func _is_generated_layout_playable() -> bool:
+	var players := _get_players()
+	var enemies_raw := get_tree().get_nodes_in_group("enemy")
+	var enemies: Array[Node] = []
+	for enemy in enemies_raw:
+		if enemy is Node:
+			enemies.append(enemy)
+	if players.is_empty() or enemies.is_empty():
+		return false
+	var pair_total := 0
+	var pair_reachable := 0
+	var pair_open := 0
+	var pair_cover_or_blocked := 0
+	var pair_blocked := 0
+	for player in players:
+		if not (player is Node3D):
+			continue
+		var player_pos3: Vector3 = (player as Node3D).global_position
+		var player_pos2 := Vector2(player_pos3.x, player_pos3.z)
+		for enemy in enemies:
+			if not (enemy is Node3D):
+				continue
+			var enemy_pos3: Vector3 = (enemy as Node3D).global_position
+			var enemy_pos2 := Vector2(enemy_pos3.x, enemy_pos3.z)
+			pair_total += 1
+			var path := get_astar_path(player_pos2, enemy_pos2)
+			if path.size() > 1:
+				pair_reachable += 1
+			var shot := get_shot_resolution(player_pos3, enemy_pos3)
+			if bool(shot.get("blocked", false)):
+				pair_blocked += 1
+				pair_cover_or_blocked += 1
+				continue
+			var multiplier := float(shot.get("damage_multiplier", 1.0))
+			if multiplier < 1.0:
+				pair_cover_or_blocked += 1
+			else:
+				pair_open += 1
+	if pair_total == 0:
+		return false
+	if require_full_reachability and pair_reachable < pair_total:
+		return false
+	if pair_blocked >= pair_total:
+		return false
+	if pair_open == 0:
+		return false
+	if require_cover_variety and pair_cover_or_blocked == 0:
+		return false
+	return true
+
 func _random_position_in_bounds() -> Vector2:
 	var half := nav_bounds_size * 0.5
 	var min_x := -half.x + procgen_margin.x
@@ -663,16 +841,185 @@ func _distance_to_bounds(pos: Vector2) -> float:
 	return minf(dx, dy)
 
 func has_clear_los(from_pos: Vector3, to_pos: Vector3) -> bool:
+	return _has_line_of_sight_with_peek(from_pos, to_pos)
+
+func get_shot_resolution(from_pos: Vector3, to_pos: Vector3) -> Dictionary:
+	var resolution := {
+		"blocked": false,
+		"damage_multiplier": 1.0,
+		"impact_position": to_pos + Vector3(0, 16, 0),
+		"cover_hit": false,
+		"block_reason": ""
+	}
 	var a := Vector2(from_pos.x, from_pos.z)
 	var b := Vector2(to_pos.x, to_pos.z)
-	var obstacles: Array[Node] = _get_nav_obstacles()
+	var obstacles := _get_hard_los_obstacles()
+	for obstacle in obstacles:
+		var rect := _los_rect_for_obstacle(obstacle)
+		if rect.size == Vector2.ZERO:
+			continue
+		if not _segment_intersects_rect(a, b, rect):
+			continue
+		var hit := _segment_rect_impact_point(a, b, rect)
+		if _has_peek_lane(from_pos, to_pos):
+			if float(resolution.damage_multiplier) > 0.5:
+				resolution.damage_multiplier = 0.5
+				resolution.cover_hit = true
+				resolution.block_reason = "building_edge"
+				if hit != INVALID_POS:
+					resolution.impact_position = Vector3(hit.x, 16.0, hit.y)
+			continue
+		resolution.blocked = true
+		resolution.block_reason = "building"
+		if hit != INVALID_POS:
+			resolution.impact_position = Vector3(hit.x, 16.0, hit.y)
+		return resolution
+	var target_at_cover_height := to_pos + Vector3(0, 16.0, 0)
+	for segment in _get_cover_segments():
+		if segment == null:
+			continue
+		if not segment.has_method("evaluate_cover"):
+			continue
+		var cover_eval: Dictionary = segment.evaluate_cover(from_pos, target_at_cover_height)
+		if not bool(cover_eval.get("applies", false)):
+			continue
+		var multiplier := float(cover_eval.get("multiplier", 1.0))
+		if multiplier >= resolution.damage_multiplier:
+			continue
+		resolution.damage_multiplier = clampf(multiplier, 0.0, 1.0)
+		resolution.cover_hit = true
+		resolution.block_reason = "cover"
+		var impact: Variant = cover_eval.get("impact_position", target_at_cover_height)
+		if impact is Vector3:
+			resolution.impact_position = impact
+	return resolution
+
+func find_tactical_cover_position(actor_pos: Vector3, opponent_pos: Vector3, max_path_steps: int = 4, search_radius_cells: int = 6) -> Vector3:
+	if _astar == null:
+		return Vector3.INF
+	var origin_cell := _world_to_cell(Vector2(actor_pos.x, actor_pos.z))
+	var best_pos := Vector3.INF
+	var best_score := -INF
+	var radius := maxi(search_radius_cells, 1)
+	var max_steps := maxi(max_path_steps, 2)
+	var current_distance := Vector2(actor_pos.x, actor_pos.z).distance_to(Vector2(opponent_pos.x, opponent_pos.z))
+	var max_allowed_distance := current_distance + grid_cell_size.x * 1.5
+	for y in range(-radius, radius + 1):
+		for x in range(-radius, radius + 1):
+			var cell := Vector2i(origin_cell.x + x, origin_cell.y + y)
+			if not _astar.is_in_boundsv(cell):
+				continue
+			if _astar.is_point_solid(cell):
+				continue
+			var world_2d := _cell_to_world(cell)
+			var path := get_astar_path(Vector2(actor_pos.x, actor_pos.z), world_2d)
+			if path.size() < 2:
+				continue
+			if path.size() - 1 > max_steps:
+				continue
+			var candidate := Vector3(world_2d.x, actor_pos.y, world_2d.y)
+			var candidate_distance := world_2d.distance_to(Vector2(opponent_pos.x, opponent_pos.z))
+			if candidate_distance > max_allowed_distance:
+				continue
+			var attack_profile := get_shot_resolution(candidate, opponent_pos)
+			if bool(attack_profile.get("blocked", false)):
+				continue
+			var defense_profile := get_shot_resolution(opponent_pos, candidate)
+			var defense_blocked := bool(defense_profile.get("blocked", false))
+			var defense_multiplier := float(defense_profile.get("damage_multiplier", 1.0))
+			var defense_partial := (not defense_blocked) and defense_multiplier < 1.0
+			var score := 0.0
+			if defense_partial:
+				score += 120.0
+			elif defense_blocked:
+				score += 40.0
+			else:
+				score += 10.0
+			score -= float(path.size()) * 2.0
+			score -= candidate_distance * 0.05
+			score -= absf(float(x)) * 0.25
+			score -= absf(float(y)) * 0.25
+			if score > best_score:
+				best_score = score
+				best_pos = candidate
+	return best_pos
+
+func _has_line_of_sight_with_peek(from_pos: Vector3, to_pos: Vector3) -> bool:
+	var a := Vector2(from_pos.x, from_pos.z)
+	var b := Vector2(to_pos.x, to_pos.z)
+	var obstacles := _get_hard_los_obstacles()
 	for obstacle in obstacles:
 		var rect := _los_rect_for_obstacle(obstacle)
 		if rect.size == Vector2.ZERO:
 			continue
 		if _segment_intersects_rect(a, b, rect):
-			return false
+			return _has_peek_lane(from_pos, to_pos)
 	return true
+
+func _has_peek_lane(from_pos: Vector3, to_pos: Vector3) -> bool:
+	var from_2d := Vector2(from_pos.x, from_pos.z)
+	var to_2d := Vector2(to_pos.x, to_pos.z)
+	var dir := to_2d - from_2d
+	if dir.length_squared() <= 0.0001:
+		return false
+	var side := Vector2(-dir.y, dir.x).normalized() * (grid_cell_size.x * 0.4)
+	var obstacles := _get_hard_los_obstacles()
+	var samples := [
+		[from_2d + side, to_2d + side],
+		[from_2d - side, to_2d - side]
+	]
+	for sample in samples:
+		var sa: Vector2 = sample[0]
+		var sb: Vector2 = sample[1]
+		var blocked := false
+		for obstacle in obstacles:
+			var rect := _los_rect_for_obstacle(obstacle)
+			if rect.size == Vector2.ZERO:
+				continue
+			if _segment_intersects_rect(sa, sb, rect):
+				blocked = true
+				break
+		if not blocked:
+			return true
+	return false
+
+func _segment_rect_impact_point(a: Vector2, b: Vector2, rect: Rect2) -> Vector2:
+	var min_pt := rect.position
+	var max_pt := rect.position + rect.size
+	var d := b - a
+	var t_min := 0.0
+	var t_max := 1.0
+	if absf(d.x) < 0.0001:
+		if a.x < min_pt.x or a.x > max_pt.x:
+			return INVALID_POS
+	else:
+		var inv_dx := 1.0 / d.x
+		var tx1 := (min_pt.x - a.x) * inv_dx
+		var tx2 := (max_pt.x - a.x) * inv_dx
+		if tx1 > tx2:
+			var tx := tx1
+			tx1 = tx2
+			tx2 = tx
+		t_min = maxf(t_min, tx1)
+		t_max = minf(t_max, tx2)
+		if t_min > t_max:
+			return INVALID_POS
+	if absf(d.y) < 0.0001:
+		if a.y < min_pt.y or a.y > max_pt.y:
+			return INVALID_POS
+	else:
+		var inv_dy := 1.0 / d.y
+		var ty1 := (min_pt.y - a.y) * inv_dy
+		var ty2 := (max_pt.y - a.y) * inv_dy
+		if ty1 > ty2:
+			var ty := ty1
+			ty1 = ty2
+			ty2 = ty
+		t_min = maxf(t_min, ty1)
+		t_max = minf(t_max, ty2)
+		if t_min > t_max:
+			return INVALID_POS
+	return a + d * t_min
 
 func _los_rect_for_obstacle(obstacle: Node) -> Rect2:
 	if not obstacle is Node3D:
@@ -748,6 +1095,11 @@ func _get_obstacle_rect(zone: Node) -> Rect2:
 
 func _get_obstacle_rect_from_node(zone: Node) -> Rect2:
 	# Read directly from node properties (reliable after procgen moves)
+	if zone is Node3D and "cover_size" in zone:
+		var cover_node := zone as Node3D
+		var cover_center := Vector2(cover_node.global_position.x, cover_node.global_position.z)
+		var cover_size: Vector2 = zone.cover_size
+		return Rect2(cover_center - cover_size * 0.5, cover_size)
 	if zone is Node3D and "building_size" in zone:
 		var node := zone as Node3D
 		var center := Vector2(node.global_position.x, node.global_position.z)
@@ -778,6 +1130,42 @@ func _get_nav_obstacles() -> Array[Node]:
 				if node is Node and node.has_node("ElevationBlocker"):
 					typed.append(node)
 	return typed
+
+func _get_hard_los_obstacles() -> Array[Node]:
+	var obstacles := _get_nav_obstacles()
+	var filtered: Array[Node] = []
+	for obstacle in obstacles:
+		if obstacle == null:
+			continue
+		if obstacle.is_in_group("cover"):
+			continue
+		filtered.append(obstacle)
+	return filtered
+
+func _get_cover_segments() -> Array:
+	return get_tree().get_nodes_in_group("cover")
+
+func _get_cover_segments_nodes() -> Array[Node]:
+	var raw := _get_cover_segments()
+	var typed: Array[Node] = []
+	for node in raw:
+		if node is Node:
+			var n := node as Node
+			if n.is_queued_for_deletion():
+				continue
+			typed.append(n)
+	return typed
+
+func _get_building_obstacles() -> Array[Node]:
+	var obstacles := _get_nav_obstacles()
+	var filtered: Array[Node] = []
+	for obstacle in obstacles:
+		if obstacle == null:
+			continue
+		if obstacle.is_in_group("cover"):
+			continue
+		filtered.append(obstacle)
+	return filtered
 
 func _get_steam_vents() -> Array[Node]:
 	var raw := get_tree().get_nodes_in_group("steam_vent")

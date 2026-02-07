@@ -422,30 +422,36 @@ func _ranged_attack_target(target: Node) -> void:
 		last_damage_dealt = 0
 		print("Ranged attack failed: target out of range (distance: ", dist, ")")
 		return
-	if not _has_clear_shot(target):
-		last_attack_result = "Shot blocked"
-		last_damage_dealt = 0
-		print("Ranged attack failed: line of sight blocked.")
-		return
 	if not spend_ap(_get_ap_cost("ranged_attack")):
 		last_attack_result = "Not enough AP"
 		last_damage_dealt = 0
 		print("Ranged attack failed: not enough AP.")
 		return
+	var resolution := _resolve_shot(target)
+	var impact_position: Vector3 = resolution.get("impact_position", target.global_position + Vector3(0, 16, 0))
 	var target_3d := target as Node3D
 	var dir: Vector3 = (target_3d.global_position - global_position).normalized()
 	dir.y = 0
 	if dir.length_squared() > 0.001:
 		_facing_direction = dir
 		_update_facing_indicator()
-	_spawn_ranged_shot_line(target_3d.global_position)
+	_spawn_ranged_shot_line(impact_position)
+	if bool(resolution.get("cover_hit", false)) or bool(resolution.get("blocked", false)):
+		_spawn_cover_impact(impact_position)
+	if bool(resolution.get("blocked", false)):
+		last_attack_result = "Blocked by cover"
+		last_damage_dealt = 0
+		print("Ranged attack blocked by cover/building.")
+		return
 	if target.has_method("take_damage"):
 		var damage := ranged_attack_damage + _get_attack_damage_bonus()
 		damage = max(damage, 0)
-		target.take_damage(damage, self)
-		last_damage_dealt = damage
-		last_attack_result = "Ranged hit for %s" % damage
-		print("Ranged attack hit for ", damage)
+		var multiplier := float(resolution.get("damage_multiplier", 1.0))
+		var final_damage := int(floor(float(damage) * clampf(multiplier, 0.0, 1.0)))
+		target.take_damage(damage, self, true, multiplier)
+		last_damage_dealt = final_damage
+		last_attack_result = "Ranged hit for %s" % final_damage
+		print("Ranged attack hit for ", final_damage)
 		if current_stance == Stance.AGGRESS:
 			_tick_alert_level()
 		_tick_alert_level()
@@ -466,19 +472,12 @@ func handle_turn_input():
 			_show_hud_notice("No other available Vessel to switch to.")
 		return
 	if Input.is_action_just_pressed("end_turn") or Input.is_action_just_pressed("ui_accept"):
-		if current_ap > 0:
-			if _end_turn_confirm_pending:
-				_end_turn_confirm_pending = false
-				CombatManager.end_turn()
-				return
-			_end_turn_confirm_pending = true
-			_show_hud_notice("AP remains. Press Space again to end turn.")
+		if _end_turn_confirm_pending:
+			_end_turn_confirm_pending = false
+			CombatManager.end_turn()
 			return
-		_end_turn_confirm_pending = false
-		if _switch_to_next_vessel_with_ap():
-			_show_hud_notice("Switched to a Vessel with AP.")
-			return
-		CombatManager.end_turn()
+		_end_turn_confirm_pending = true
+		_show_hud_notice("Press Space again to end turn.")
 
 func handle_attack_input() -> void:
 	if _is_dead:
@@ -605,12 +604,15 @@ func get_ranged_attack_range() -> float:
 func get_last_attack_result() -> String:
 	return last_attack_result
 
-func take_damage(amount: int, source: Node = null) -> void:
+func take_damage(amount: int, source: Node = null, is_ranged: bool = false, damage_multiplier: float = 1.0) -> void:
 	if amount <= 0:
 		return
 	if _is_dead:
 		return
-	var reduced_amount: int = int(max(amount - _get_damage_reduction(), 0))
+	var scaled_amount := amount
+	if is_ranged:
+		scaled_amount = int(floor(float(amount) * clampf(damage_multiplier, 0.0, 1.0)))
+	var reduced_amount: int = int(max(scaled_amount - _get_damage_reduction(), 0))
 	current_hp = max(current_hp - reduced_amount, 0)
 	last_damage_taken = reduced_amount
 	last_damage_source = source.name if source else "-"
@@ -910,6 +912,29 @@ func _spawn_ranged_shot_line(target_pos: Vector3) -> void:
 	tween.tween_property(mat, "albedo_color:a", 0.0, 0.12)
 	tween.tween_callback(mesh_instance.queue_free)
 
+func _spawn_cover_impact(world_pos: Vector3) -> void:
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	var impact := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 3.0
+	sphere.height = 6.0
+	impact.mesh = sphere
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.35, 0.9, 1.0, 0.95)
+	mat.emission_enabled = true
+	mat.emission = Color(0.2, 0.7, 1.0)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	impact.material_override = mat
+	impact.global_position = world_pos
+	scene.add_child(impact)
+	var tween := create_tween()
+	tween.tween_property(mat, "albedo_color:a", 0.0, 0.16)
+	tween.parallel().tween_property(impact, "scale", Vector3(1.6, 1.6, 1.6), 0.16)
+	tween.tween_callback(impact.queue_free)
+
 func _can_attack_melee(target: Node) -> bool:
 	if not (target is Node3D):
 		return false
@@ -932,6 +957,17 @@ func _has_clear_shot(target: Node) -> bool:
 	if world and world.has_method("has_clear_los"):
 		return world.has_clear_los(global_position, target.global_position)
 	return true
+
+func _resolve_shot(target: Node) -> Dictionary:
+	var world := get_tree().current_scene
+	if world and world.has_method("get_shot_resolution"):
+		return world.get_shot_resolution(global_position, target.global_position)
+	return {
+		"blocked": false,
+		"damage_multiplier": 1.0,
+		"impact_position": target.global_position + Vector3(0, 16, 0),
+		"cover_hit": false
+	}
 
 func _xz_distance_to(target: Vector3) -> float:
 	var a := Vector2(global_position.x, global_position.z)
@@ -981,35 +1017,6 @@ func _switch_to_next_vessel() -> bool:
 		next_vessel.call("_focus_camera_on_self")
 	print("Switch success: now controlling ", next_vessel.name)
 	return true
-
-func _switch_to_next_vessel_with_ap() -> bool:
-	var squad_manager := _get_squad_manager()
-	var living: Array = []
-	if squad_manager:
-		living = squad_manager.get_living_vessels()
-	else:
-		living = get_tree().get_nodes_in_group("player")
-	if living.is_empty():
-		return false
-	var start_index := living.find(self)
-	if start_index == -1:
-		start_index = 0
-	for offset in range(1, living.size() + 1):
-		var candidate: Node = living[(start_index + offset) % living.size()] as Node
-		if candidate == null or candidate == self:
-			continue
-		if not candidate.has_method("get_current_ap"):
-			continue
-		if candidate.get_current_ap() <= 0:
-			continue
-		if not CombatManager or not CombatManager.handoff_turn_to(candidate):
-			continue
-		if squad_manager:
-			squad_manager.set_active_vessel(candidate)
-		if candidate.has_method("_focus_camera_on_self"):
-			candidate.call("_focus_camera_on_self")
-		return true
-	return false
 
 func _show_hud_notice(message: String) -> void:
 	var scene := get_tree().current_scene if get_tree() else null

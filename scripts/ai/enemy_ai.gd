@@ -8,6 +8,7 @@ const SeekState = preload("res://scripts/ai/states/seek_state.gd")
 @export var step_distance: float = 32.0
 @export var target_group: StringName = "player"
 @export var start_state: StringName = "idle"
+@export var debug_enemy_ai: bool = false
 
 var _states: Dictionary = {}
 var _current_state: AIState
@@ -18,6 +19,10 @@ func _ready() -> void:
 		"idle": IdleState.new(),
 		"seek": SeekState.new()
 	}
+	for state_name in _states.keys():
+		var state: AIState = _states[state_name]
+		if state:
+			state.set("debug_enabled", debug_enemy_ai)
 	set_state(start_state)
 	if CombatManager:
 		CombatManager.turn_started.connect(_on_turn_started)

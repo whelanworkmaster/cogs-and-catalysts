@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://scripts/world/elevation_area.gd" id="9_elev"]
 [ext_resource type="Script" path="res://scripts/world/steam_vent.gd" id="10_vent"]
 [ext_resource type="Script" path="res://scripts/world/grid_overlay.gd" id="11_grid"]
+[ext_resource type="Script" path="res://scripts/world/cover_segment.gd" id="12_cover"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -69,6 +70,14 @@ script = ExtResource("11_grid")
 [node name="SteamVent1" type="Area3D" parent="."]
 script = ExtResource("10_vent")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 0, 60)
+
+[node name="CoverSegmentA" type="StaticBody3D" parent="."]
+script = ExtResource("12_cover")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 0, -20)
+
+[node name="CoverSegmentB" type="StaticBody3D" parent="."]
+script = ExtResource("12_cover")
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 80, 0, 120)
 
 [node name="CombatHUD" parent="." instance=ExtResource("3_2h1x5")]
 

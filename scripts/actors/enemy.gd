@@ -13,6 +13,8 @@ const EnemyThreatVisual = preload("res://scripts/ui/enemy_threat_visual.gd")
 @export var attack_damage: int = 2
 @export var ranged_attack_range: float = 240.0
 @export var ranged_attack_damage: int = 2
+@export var turn_move_duration: float = 0.18
+@export var turn_action_delay: float = 0.14
 var current_ap: int = 0
 var current_hp: int = 0
 var current_elevation: int = 0
@@ -82,40 +84,23 @@ func _on_elevation_area_exited(area: Area3D) -> void:
 			_apply_elevation_visuals()
 
 func move_towards(target_position, distance: float = 0.0) -> void:
-	var step := distance if distance > 0.0 else move_step
-	var world := get_tree().current_scene
-
-	# Convert target to Vector3 if needed
-	var target_3d: Vector3
-	if target_position is Vector3:
-		target_3d = target_position
-	elif target_position is Vector2:
-		target_3d = Vector3(target_position.x, 0, target_position.y)
-	else:
+	var next_pos := _get_next_step_position(target_position, distance)
+	if next_pos == Vector3.INF:
 		return
-
 	var old_pos := global_position
-	if world and world.has_method("get_astar_path_3d"):
-		var path: PackedVector3Array = world.get_astar_path_3d(global_position, target_3d)
-		if path.size() > 1:
-			var next_pos: Vector3 = path[1]
-			if world.has_method("snap_to_grid"):
-				next_pos = world.snap_to_grid(next_pos)
-			next_pos.y = global_position.y
-			global_position = next_pos
-			_update_facing_from_movement(old_pos, global_position)
-			return
-	# Fallback to 2D path
-	if world and world.has_method("get_astar_path"):
-		var pos_2d := Vector2(global_position.x, global_position.z)
-		var target_2d := Vector2(target_3d.x, target_3d.z)
-		var path: PackedVector2Array = world.get_astar_path(pos_2d, target_2d)
-		if path.size() > 1:
-			var next_pos_2d: Vector2 = path[1]
-			if world.has_method("snap_to_grid"):
-				next_pos_2d = world.snap_to_grid(next_pos_2d)
-			global_position = Vector3(next_pos_2d.x, global_position.y, next_pos_2d.y)
-			_update_facing_from_movement(old_pos, global_position)
+	global_position = next_pos
+	_update_facing_from_movement(old_pos, global_position)
+
+func move_towards_async(target_position, distance: float = 0.0) -> bool:
+	var next_pos := _get_next_step_position(target_position, distance)
+	if next_pos == Vector3.INF:
+		return false
+	var old_pos := global_position
+	var tween := create_tween()
+	tween.tween_property(self, "global_position", next_pos, turn_move_duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	await tween.finished
+	_update_facing_from_movement(old_pos, global_position)
+	return true
 
 func attack(target: Node) -> void:
 	if not target:
@@ -130,16 +115,27 @@ func can_attack_ranged(target: Node) -> bool:
 		return false
 	if _xz_distance_to(target.global_position) > ranged_attack_range:
 		return false
-	return _has_clear_shot(target)
+	return true
 
 func ranged_attack(target: Node) -> void:
 	if not target:
 		return
-	if not _has_clear_shot(target):
+	var resolution := _resolve_shot(target)
+	var impact_position: Vector3 = resolution.get("impact_position", target.global_position + Vector3(0, 16, 0))
+	_spawn_ranged_shot_line(impact_position)
+	if bool(resolution.get("cover_hit", false)) or bool(resolution.get("blocked", false)):
+		_spawn_cover_impact(impact_position)
+	if bool(resolution.get("blocked", false)):
 		return
-	_spawn_ranged_shot_line(target.global_position)
+	var multiplier := float(resolution.get("damage_multiplier", 1.0))
 	if target.has_method("take_damage"):
-		target.take_damage(ranged_attack_damage, self)
+		target.take_damage(ranged_attack_damage, self, true, multiplier)
+
+func ranged_attack_async(target: Node) -> void:
+	ranged_attack(target)
+	var tree := get_tree()
+	if tree:
+		await tree.create_timer(maxf(turn_action_delay, 0.0)).timeout
 
 func _has_clear_shot(target: Node) -> bool:
 	var world := get_tree().current_scene
@@ -168,6 +164,77 @@ func _spawn_ranged_shot_line(target_pos: Vector3) -> void:
 	var tween := create_tween()
 	tween.tween_property(mat, "albedo_color:a", 0.0, 0.12)
 	tween.tween_callback(mesh_instance.queue_free)
+
+func _spawn_cover_impact(world_pos: Vector3) -> void:
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	var impact := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 3.0
+	sphere.height = 6.0
+	impact.mesh = sphere
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.82, 0.2, 0.95)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.55, 0.15)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	impact.material_override = mat
+	impact.global_position = world_pos
+	scene.add_child(impact)
+	var tween := create_tween()
+	tween.tween_property(mat, "albedo_color:a", 0.0, 0.16)
+	tween.parallel().tween_property(impact, "scale", Vector3(1.6, 1.6, 1.6), 0.16)
+	tween.tween_callback(impact.queue_free)
+
+func _resolve_shot(target: Node) -> Dictionary:
+	var world := get_tree().current_scene
+	if world and world.has_method("get_shot_resolution"):
+		return world.get_shot_resolution(global_position, target.global_position)
+	return {
+		"blocked": false,
+		"damage_multiplier": 1.0,
+		"impact_position": target.global_position + Vector3(0, 16, 0),
+		"cover_hit": false
+	}
+
+func _get_next_step_position(target_position, distance: float = 0.0) -> Vector3:
+	var target_3d := _to_target_vector3(target_position)
+	if target_3d == Vector3.INF:
+		return Vector3.INF
+	var world := get_tree().current_scene
+	if world and world.has_method("get_astar_path_3d"):
+		var path: PackedVector3Array = world.get_astar_path_3d(global_position, target_3d)
+		if path.size() > 1:
+			var next_pos: Vector3 = path[1]
+			if world.has_method("snap_to_grid"):
+				next_pos = world.snap_to_grid(next_pos)
+			next_pos.y = global_position.y
+			return next_pos
+	if world and world.has_method("get_astar_path"):
+		var pos_2d := Vector2(global_position.x, global_position.z)
+		var target_2d := Vector2(target_3d.x, target_3d.z)
+		var path_2d: PackedVector2Array = world.get_astar_path(pos_2d, target_2d)
+		if path_2d.size() > 1:
+			var next_pos_2d: Vector2 = path_2d[1]
+			if world.has_method("snap_to_grid"):
+				next_pos_2d = world.snap_to_grid(next_pos_2d)
+			return Vector3(next_pos_2d.x, global_position.y, next_pos_2d.y)
+	var step := distance if distance > 0.0 else move_step
+	var to_target := target_3d - global_position
+	to_target.y = 0
+	if to_target.length_squared() <= 0.001:
+		return Vector3.INF
+	var dir := to_target.normalized()
+	return global_position + dir * step
+
+func _to_target_vector3(target_position) -> Vector3:
+	if target_position is Vector3:
+		return target_position
+	if target_position is Vector2:
+		return Vector3(target_position.x, 0, target_position.y)
+	return Vector3.INF
 
 func end_turn() -> void:
 	if CombatManager:
@@ -220,12 +287,18 @@ func get_attack_targets() -> Array:
 func get_ai() -> Node:
 	return ai
 
-func take_damage(amount: int, source: Node = null) -> void:
+func take_damage(amount: int, source: Node = null, is_ranged: bool = false, damage_multiplier: float = 1.0) -> void:
 	if amount <= 0:
 		return
-	current_hp = max(current_hp - amount, 0)
-	print("%s took %s damage. HP: %s/%s" % [name, amount, current_hp, max_hp])
-	_spawn_damage_popup(amount, Color(1.0, 0.35, 0.35))
+	var final_damage := amount
+	if is_ranged:
+		final_damage = int(floor(float(amount) * clampf(damage_multiplier, 0.0, 1.0)))
+	if final_damage <= 0:
+		_spawn_damage_popup(0, Color(0.7, 0.9, 1.0))
+		return
+	current_hp = max(current_hp - final_damage, 0)
+	print("%s took %s damage. HP: %s/%s" % [name, final_damage, current_hp, max_hp])
+	_spawn_damage_popup(final_damage, Color(1.0, 0.35, 0.35))
 	_play_hit_feedback()
 	if current_hp <= 0:
 		_die()
