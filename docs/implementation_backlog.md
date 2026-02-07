@@ -1,6 +1,6 @@
 # Implementation Backlog - Cogs & Catalyst
 
-Last updated: 2026-02-07
+Last updated: 2026-02-07 (post-cover/procgen pass)
 Source alignment:
 - `docs/designbible.md`
 - `docs/currentprogress.md`
@@ -101,6 +101,30 @@ Source alignment:
 - AP and action feedback update correctly per selected unit.
 
 ## P1 Backlog (Depth and Differentiation)
+### B010 - Cover and LOS Foundation
+- Priority: P1
+- Milestone: M3
+- Status: In progress (partial) on 2026-02-07
+- Outcome: Cover supports tactical line play for both player and enemies.
+- Implementation:
+- Added low-profile, full-tile cover blocks (`scripts/world/cover_segment.gd`).
+- Added shot resolution rules for full block vs partial cover and cover-hit feedback.
+- Added enemy behavior rule: attack from partial cover, reposition from full cover/open.
+- Added stabilization pass for enemy tactical movement and oscillation handling.
+- Added procgen retry/validation checks for reachable, shootable, cover-relevant maps.
+- Target files:
+- `scripts/world/cover_segment.gd`
+- `scripts/world/main.gd`
+- `scripts/actors/enemy.gd`
+- `scripts/player.gd`
+- `scripts/ai/enemy_ai.gd`
+- `scripts/ai/states/seek_state.gd`
+- `scenes/main.tscn`
+- Acceptance criteria:
+- Cover influences damage and visibility for both factions.
+- Cover interactions are visually readable (shot impacts / blocked fire).
+- Generated maps consistently produce playable cover lanes for testing.
+
 ### B005 - Enemy Role Expansion
 - Priority: P1
 - Milestone: M3

@@ -36,13 +36,23 @@ Strategic change:
 - Fixed movement path preview conflicts so inactive Vessels no longer clear active preview lines.
 - Added multi-unit HUD squad panel with per-Vessel HP/AP snapshot and active/turn markers.
 - Added UI click switching between Vessels during player turns.
-- Added end-turn AP confirmation flow (`Space` warns first, second press confirms).
+- Added end-turn AP confirmation flow (`Space` always requires a second press to confirm).
 
 ### Encounter Systems (Working / Partial)
 - Procedural combat space with buildings and blockers.
 - Hazard actors (steam vents) and resource pickups (mutagenic cells).
 - Pressure HUD exists as a compact bottom-docked two-line overlay.
+- Added low-profile, full-tile cover blocks with directional cover mitigation for both squads.
+- Added building edge-peek shot handling (partial cover) and full block handling with impact feedback.
+- Added paced enemy action sequencing (move/attack timing) for readable enemy turns.
+- Added tactical procgen validation/retry pass to reduce unplayable encounter layouts.
 - Reinforcement and mission-failure consequences are not fully defined yet.
+
+### Camera and Input (First Pass Implemented)
+- Camera now supports manual battlefield panning (`W/A/S/D`) independent of actor selection.
+- Manual pan temporarily disables follow until a Vessel is selected again.
+- Camera orbit/zoom and pan direction controls were inverted to match current playtest preference.
+- Keyboard unit swap remains on `Tab` (fallback `C`).
 
 ### Architecture
 - State split between exploration/combat already exists, but this should evolve into mission-run flow states.
@@ -75,6 +85,7 @@ No major rewrite is required for fundamentals; the next phase is system layering
 - Add enemy role diversity (anchor, disruptor, pressure, support).
 - Expand hazard interactions into reliable tactical tools.
 - Formalize reinforcement and alarm breakpoints tied to pressure thresholds.
+- Mature cover and line-of-sight behavior into deliberate positioning gameplay.
 
 ## Recommended Development Order (Revised)
 1) Mission Loop Skeleton
