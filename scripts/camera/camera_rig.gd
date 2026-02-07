@@ -11,6 +11,7 @@ class_name CameraRig
 @export var initial_yaw_deg: float = -30.0
 @export var follow_target: NodePath = ""
 @export var follow_smoothing: float = 8.0
+@export var pan_speed: float = 600.0
 
 var _yaw: float = 0.0
 var _pitch: float = 0.0
@@ -20,6 +21,7 @@ var _is_orbiting: bool = false
 @onready var _camera: Camera3D = $Camera3D
 
 func _ready() -> void:
+	_ensure_camera_actions()
 	_yaw = deg_to_rad(initial_yaw_deg)
 	_pitch = deg_to_rad(pitch_deg)
 	_zoom = initial_zoom
@@ -37,23 +39,65 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mb.button_index == MOUSE_BUTTON_MIDDLE:
 			_is_orbiting = mb.pressed
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_zoom = maxf(min_zoom, _zoom - zoom_speed)
+			_zoom = minf(max_zoom, _zoom + zoom_speed)
 			_camera.size = _zoom
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_zoom = minf(max_zoom, _zoom + zoom_speed)
+			_zoom = maxf(min_zoom, _zoom - zoom_speed)
 			_camera.size = _zoom
 	elif event is InputEventMouseMotion and _is_orbiting:
 		var motion := event as InputEventMouseMotion
 		# Only allow yaw rotation (horizontal), pitch is locked
-		_yaw -= motion.relative.x * orbit_speed
+		_yaw += motion.relative.x * orbit_speed
 
 func _process(delta: float) -> void:
+	var is_panning := _handle_manual_pan(delta)
+	if is_panning:
+		# Manual pan takes camera control away from character follow until reselected.
+		follow_target = NodePath("")
 	if not follow_target.is_empty():
 		var target := get_node_or_null(follow_target)
 		if target and target is Node3D:
 			var target_pos: Vector3 = (target as Node3D).global_position
 			global_position = global_position.lerp(target_pos, follow_smoothing * delta)
 	_update_camera_transform()
+
+func _handle_manual_pan(delta: float) -> bool:
+	var input := Vector2.ZERO
+	if Input.is_action_pressed("camera_pan_right"):
+		input.x -= 1.0
+	if Input.is_action_pressed("camera_pan_left"):
+		input.x += 1.0
+	if Input.is_action_pressed("camera_pan_down"):
+		input.y -= 1.0
+	if Input.is_action_pressed("camera_pan_up"):
+		input.y += 1.0
+	if input.length_squared() <= 0.0:
+		return false
+	input = input.normalized()
+	var forward := Vector3.FORWARD.rotated(Vector3.UP, _yaw)
+	forward.y = 0.0
+	forward = forward.normalized()
+	var right := Vector3.RIGHT.rotated(Vector3.UP, _yaw)
+	right.y = 0.0
+	right = right.normalized()
+	var move_dir := (right * input.x) + (forward * input.y)
+	global_position += move_dir * pan_speed * delta
+	return true
+
+func _ensure_camera_actions() -> void:
+	_add_key_action("camera_pan_up", KEY_W)
+	_add_key_action("camera_pan_down", KEY_S)
+	_add_key_action("camera_pan_left", KEY_A)
+	_add_key_action("camera_pan_right", KEY_D)
+
+func _add_key_action(action_name: StringName, keycode: Key) -> void:
+	if not InputMap.has_action(action_name):
+		InputMap.add_action(action_name)
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.physical_keycode = keycode
+	if not InputMap.action_has_event(action_name, event):
+		InputMap.action_add_event(action_name, event)
 
 func _update_camera_transform() -> void:
 	if not _camera:
