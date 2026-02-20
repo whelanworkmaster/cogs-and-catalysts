@@ -34,6 +34,9 @@ extends Node3D
 @export var require_full_reachability: bool = true
 @export var nav_bounds_size: Vector2 = Vector2(1200, 840)
 @export var grid_cell_size: Vector2 = Vector2(32, 32)
+@export var enable_art_deco_atmosphere: bool = true
+@export var fix_directional_shadow_culling: bool = true
+@export var directional_shadow_max_distance: float = 2600.0
 var nav_region: Node = null  # NavigationRegion3D placeholder — pathfinding uses AStarGrid2D
 var _astar := AStarGrid2D.new()
 var _grid_origin: Vector2 = Vector2.ZERO
@@ -62,6 +65,7 @@ func _ready() -> void:
 	call_deferred("_post_scene_setup")
 
 func _post_scene_setup() -> void:
+	_configure_scene_visuals()
 	_ensure_squad_size()
 	if use_procgen:
 		_setup_procgen()
@@ -74,6 +78,55 @@ func _post_scene_setup() -> void:
 			run_controller.begin_encounter()
 	elif auto_start_combat:
 		_start_combat()
+
+func _configure_scene_visuals() -> void:
+	if enable_art_deco_atmosphere:
+		_apply_art_deco_atmosphere()
+	if fix_directional_shadow_culling:
+		_apply_shadow_stability_tuning()
+
+func _apply_art_deco_atmosphere() -> void:
+	var world_env_node := get_node_or_null("WorldEnvironment")
+	if world_env_node is WorldEnvironment:
+		var env := (world_env_node as WorldEnvironment).environment
+		if env:
+			env.background_mode = Environment.BG_COLOR
+			env.background_color = Color(0.09, 0.10, 0.12, 1.0)
+			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+			env.ambient_light_color = Color(0.30, 0.31, 0.32, 1.0)
+			env.ambient_light_energy = 0.72
+			env.set("fog_enabled", true)
+			env.set("fog_density", 0.0012)
+			env.set("fog_light_color", Color(0.40, 0.40, 0.39, 1.0))
+			env.set("fog_light_energy", 0.35)
+			env.set("fog_sun_scatter", 0.10)
+
+	var ground_node := get_node_or_null("GroundPlane")
+	if ground_node is CSGBox3D:
+		var ground := ground_node as CSGBox3D
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.12, 0.13, 0.12, 1.0)
+		mat.roughness = 0.9
+		mat.metallic = 0.05
+		mat.emission_enabled = true
+		mat.emission = Color(0.22, 0.18, 0.12, 1.0)
+		mat.emission_energy_multiplier = 0.08
+		ground.material = mat
+
+func _apply_shadow_stability_tuning() -> void:
+	var sun_node := get_node_or_null("DirectionalLight3D")
+	if not (sun_node is DirectionalLight3D):
+		return
+	var sun := sun_node as DirectionalLight3D
+	sun.shadow_enabled = true
+	sun.light_color = Color(1.0, 0.95, 0.86, 1.0)
+	sun.light_energy = 1.2
+	sun.shadow_bias = 0.06
+	sun.shadow_normal_bias = 1.2
+	sun.set("directional_shadow_mode", DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS)
+	sun.set("directional_shadow_max_distance", maxf(directional_shadow_max_distance, 600.0))
+	sun.set("directional_shadow_fade_start", 0.95)
+	sun.set("directional_shadow_blend_splits", true)
 
 func _start_combat() -> void:
 	if not CombatManager or CombatManager.active_combat:
