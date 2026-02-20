@@ -3,6 +3,7 @@ extends CharacterBody3D
 class_name Player
 
 const DamagePopup = preload("res://scripts/ui/damage_popup.gd")
+const KAYKIT_DUMMY_SCENE := preload("res://addons/kaykit_prototype_bits/Assets/gltf/Dummy_Base.gltf")
 
 # Movement variables
 @export var move_speed_per_cell: float = 0.08  # seconds per cell for tween animation
@@ -17,6 +18,7 @@ var ap_regen_accumulator: float = 0.0
 @export var attack_damage: int = 3
 @export var ranged_attack_range: float = 240.0
 @export var ranged_attack_damage: int = 2
+@export var kaykit_model_scale: float = 22.0
 var last_damage_dealt: int = 0
 var last_attack_result: String = "-"
 @export var max_hp: int = 12
@@ -93,6 +95,14 @@ func _setup_visual() -> void:
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.2, 0.45, 1.0)
 		_body_mesh.material = mat
+		_body_mesh.visible = false
+	if _visual_root and not _visual_root.has_node("KaykitDummy"):
+		var dummy := KAYKIT_DUMMY_SCENE.instantiate()
+		if dummy is Node3D:
+			var dummy_node := dummy as Node3D
+			dummy_node.name = "KaykitDummy"
+			dummy_node.scale = Vector3.ONE * kaykit_model_scale
+			_visual_root.add_child(dummy_node)
 	_create_facing_indicator()
 
 func _create_facing_indicator() -> void:

@@ -2,6 +2,9 @@ extends Area3D
 
 class_name SteamVent
 
+const KAYKIT_CAN_SCENE := preload("res://addons/kaykit_prototype_bits/Assets/gltf/Can_A.gltf")
+const KAYKIT_FLOOR_SCENE := preload("res://addons/kaykit_prototype_bits/Assets/gltf/Floor_Prototype.gltf")
+
 @export var damage_amount: int = 0
 @export var toxicity_ticks: int = 1
 @export var affect_player: bool = true
@@ -20,15 +23,45 @@ func _ready() -> void:
 	_build_detection_shape()
 
 func _build_visual() -> void:
-	var mesh := CSGBox3D.new()
-	mesh.name = "VentMesh"
-	mesh.size = vent_size
-	mesh.transform.origin = Vector3(0, vent_size.y * 0.5, 0)
+	var root := Node3D.new()
+	root.name = "VentMesh"
+	add_child(root)
+
+	var grate := KAYKIT_FLOOR_SCENE.instantiate()
+	if grate is Node3D:
+		var grate_node := grate as Node3D
+		grate_node.scale = Vector3(vent_size.x / 4.0, 1.0, vent_size.z / 4.0)
+		root.add_child(grate_node)
+
+	var can_offsets := [
+		Vector3(vent_size.x * 0.25, 0.0, vent_size.z * 0.25),
+		Vector3(-vent_size.x * 0.25, 0.0, vent_size.z * 0.25),
+		Vector3(vent_size.x * 0.25, 0.0, -vent_size.z * 0.25),
+		Vector3(-vent_size.x * 0.25, 0.0, -vent_size.z * 0.25)
+	]
+	for offset in can_offsets:
+		var can := KAYKIT_CAN_SCENE.instantiate()
+		if can is Node3D:
+			var can_node := can as Node3D
+			can_node.position = offset
+			can_node.scale = Vector3(20.0, 20.0, 20.0)
+			root.add_child(can_node)
+
+	var glow := MeshInstance3D.new()
+	glow.name = "VentGlow"
+	var box := BoxMesh.new()
+	box.size = vent_size
+	glow.mesh = box
+	glow.position = Vector3(0.0, vent_size.y * 0.5, 0.0)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = vent_color
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mesh.material = mat
-	add_child(mesh)
+	mat.emission_enabled = true
+	mat.emission = Color(0.6, 0.95, 0.4, 1.0)
+	mat.emission_energy_multiplier = 0.35
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.material_override = mat
+	root.add_child(glow)
 
 func _build_detection_shape() -> void:
 	var shape_node := CollisionShape3D.new()

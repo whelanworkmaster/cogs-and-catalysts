@@ -7,6 +7,8 @@ enum BuildingVisualStyle {
 	ART_DECO
 }
 
+const KAYKIT_TEXTURE := preload("res://addons/kaykit_prototype_bits/Assets/textures/prototypebits_texture.png")
+
 @export var elevation_level: int = 0
 @export var elevation_height: float = 24.0
 @export var building_size: Vector3 = Vector3(128, 24, 96)
@@ -95,6 +97,9 @@ func _add_box_part(root: Node3D, part_name: String, size: Vector3, local_pos: Ve
 	mesh.transform.origin = local_pos
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = albedo
+	mat.albedo_texture = KAYKIT_TEXTURE
+	mat.uv1_triplanar = true
+	mat.uv1_scale = Vector3(0.04, 0.04, 0.04)
 	mat.metallic = metallic
 	mat.roughness = roughness
 	mesh.material_override = mat

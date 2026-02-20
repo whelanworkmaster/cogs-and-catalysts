@@ -2,6 +2,8 @@ extends StaticBody3D
 
 class_name CoverSegment
 
+const KAYKIT_CUBE_SCENE := preload("res://addons/kaykit_prototype_bits/Assets/gltf/Primitive_Cube.gltf")
+
 @export var cover_size: Vector2 = Vector2(32.0, 32.0)
 @export var cover_height: float = 16.0
 @export var cover_strength: float = 0.5
@@ -43,14 +45,23 @@ func evaluate_cover(attacker_pos: Vector3, target_pos: Vector3) -> Dictionary:
 	}
 
 func _build_visual() -> void:
-	var mesh := CSGBox3D.new()
-	mesh.name = "CoverMesh"
-	mesh.size = Vector3(cover_size.x, cover_height, cover_size.y)
-	mesh.transform.origin = Vector3(0, cover_height * 0.5, 0)
+	var visual_root := Node3D.new()
+	visual_root.name = "CoverMesh"
+	add_child(visual_root)
+	var instanced := KAYKIT_CUBE_SCENE.instantiate()
+	if instanced is Node3D:
+		var model := instanced as Node3D
+		model.position = Vector3(0.0, 0.0, 0.0)
+		model.scale = Vector3(cover_size.x / 4.0, cover_height / 4.0, cover_size.y / 4.0)
+		visual_root.add_child(model)
+		return
+	var fallback := CSGBox3D.new()
+	fallback.size = Vector3(cover_size.x, cover_height, cover_size.y)
+	fallback.transform.origin = Vector3(0.0, cover_height * 0.5, 0.0)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = cover_color
-	mesh.material = mat
-	add_child(mesh)
+	fallback.material = mat
+	visual_root.add_child(fallback)
 
 func _build_blocker() -> void:
 	var blocker := StaticBody3D.new()

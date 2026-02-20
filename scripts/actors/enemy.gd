@@ -5,6 +5,7 @@ class_name Enemy
 const DamagePopup = preload("res://scripts/ui/damage_popup.gd")
 const MutagenicCell = preload("res://scripts/world/mutagenic_cell.gd")
 const EnemyThreatVisual = preload("res://scripts/ui/enemy_threat_visual.gd")
+const KAYKIT_DUMMY_SCENE = preload("res://addons/kaykit_prototype_bits/Assets/gltf/Dummy_Base.gltf")
 
 @export var max_hp: int = 8
 @export var max_ap: int = 10
@@ -13,6 +14,7 @@ const EnemyThreatVisual = preload("res://scripts/ui/enemy_threat_visual.gd")
 @export var attack_damage: int = 2
 @export var ranged_attack_range: float = 240.0
 @export var ranged_attack_damage: int = 2
+@export var kaykit_model_scale: float = 20.0
 @export var turn_move_duration: float = 0.18
 @export var turn_action_delay: float = 0.14
 var current_ap: int = 0
@@ -47,6 +49,14 @@ func _setup_visual() -> void:
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.9, 0.2, 0.2)
 		_body_mesh.material = mat
+		_body_mesh.visible = false
+	if _visual_root and not _visual_root.has_node("KaykitDummy"):
+		var dummy := KAYKIT_DUMMY_SCENE.instantiate()
+		if dummy is Node3D:
+			var dummy_node := dummy as Node3D
+			dummy_node.name = "KaykitDummy"
+			dummy_node.scale = Vector3.ONE * kaykit_model_scale
+			_visual_root.add_child(dummy_node)
 	_create_facing_indicator()
 
 func _create_facing_indicator() -> void:

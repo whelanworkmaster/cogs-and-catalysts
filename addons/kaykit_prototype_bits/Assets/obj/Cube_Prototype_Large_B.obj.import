@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://bmlcllol4qe54"
+path="res://.godot/imported/Cube_Prototype_Large_B.obj-1c30999fc74184d4d2a93279097d4a16.mesh"
+
+[deps]
+
+files=["res://.godot/imported/Cube_Prototype_Large_B.obj-1c30999fc74184d4d2a93279097d4a16.mesh"]
+
+source_file="res://addons/kaykit_prototype_bits/Assets/obj/Cube_Prototype_Large_B.obj"
+dest_files=["res://.godot/imported/Cube_Prototype_Large_B.obj-1c30999fc74184d4d2a93279097d4a16.mesh", "res://.godot/imported/Cube_Prototype_Large_B.obj-1c30999fc74184d4d2a93279097d4a16.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false
