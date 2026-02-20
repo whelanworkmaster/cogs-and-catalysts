@@ -1,7 +1,15 @@
 extends Node3D
 
+enum ProcgenLayoutArchetype {
+	SCATTER,
+	CROSSFIRE,
+	SPLIT_LANES
+}
+
 @export var auto_start_combat: bool = true
 @export var use_procgen: bool = true
+@export var use_graph_layout_procgen: bool = true
+@export var procgen_layout_archetype: ProcgenLayoutArchetype = ProcgenLayoutArchetype.CROSSFIRE
 @export var squad_size: int = 2
 @export var enemy_count: int = 2
 @export var building_count_min: int = 4
@@ -32,6 +40,10 @@ extends Node3D
 @export var procgen_retry_attempts: int = 8
 @export var require_cover_variety: bool = true
 @export var require_full_reachability: bool = true
+@export var require_lane_variety: bool = true
+@export_range(0.8, 2.5, 0.1) var procgen_density_multiplier: float = 1.7
+@export_range(1.0, 3.0, 0.1) var graph_cover_density_bias: float = 1.5
+@export_range(0.15, 0.45, 0.01) var spawn_side_width_ratio: float = 0.24
 @export var nav_bounds_size: Vector2 = Vector2(1200, 840)
 @export var grid_cell_size: Vector2 = Vector2(32, 32)
 @export var enable_art_deco_atmosphere: bool = true
@@ -43,6 +55,7 @@ var _grid_origin: Vector2 = Vector2.ZERO
 var _rng := RandomNumberGenerator.new()
 var _base_move_ap_cost: int = 1
 var _toxicity_penalty_active: bool = false
+var _active_layout_blueprint: Dictionary = {}
 
 const ENEMY_SCENE := preload("res://scenes/enemy.tscn")
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
@@ -325,22 +338,462 @@ func _setup_procgen() -> void:
 	if debug_procgen:
 		print("Procgen: seed=", procgen_seed, " margin=", procgen_margin, " buildings=", building_count_min, "-", building_count_max, " vents=", vent_count_min, "-", vent_count_max, " enemies=", enemy_count, " retries=", retries)
 	for attempt in range(retries):
-		_randomize_obstacles()
-		_randomize_cover_segments()
-		_refresh_grid_overlay()
-		_position_players()
-		_spawn_enemies()
-		_randomize_steam_vents()
+		_active_layout_blueprint = {}
+		if use_graph_layout_procgen:
+			_generate_graph_layout()
+		else:
+			_randomize_obstacles()
+			_randomize_cover_segments()
+			_refresh_grid_overlay()
+			_position_players()
+			_spawn_enemies()
+			_randomize_steam_vents()
 		_build_astar_grid()
-		if _is_generated_layout_playable():
+		var playable := _is_generated_layout_playable()
+		var tactically_varied := _has_tactical_lane_variety()
+		if playable and tactically_varied:
 			accepted = true
 			if debug_procgen:
 				print("Procgen accepted on attempt ", attempt + 1, "/", retries)
 			break
 		if debug_procgen:
-			print("Procgen rejected on attempt ", attempt + 1, "/", retries)
+			var reason := "playability" if not playable else "lane_variety"
+			print("Procgen rejected on attempt ", attempt + 1, "/", retries, " reason=", reason)
 	if not accepted and debug_procgen:
 		print("Procgen fallback: keeping best-effort final attempt.")
+
+func _generate_graph_layout() -> void:
+	var blueprint := _create_layout_blueprint()
+	_active_layout_blueprint = blueprint
+	_place_buildings_from_blueprint(blueprint)
+	_place_cover_from_blueprint(blueprint)
+	_refresh_grid_overlay()
+	_place_players_from_blueprint(blueprint)
+	_place_enemies_from_blueprint(blueprint)
+	_place_vents_from_blueprint(blueprint)
+
+func _create_layout_blueprint() -> Dictionary:
+	var usable := _get_usable_layout_rect()
+	match procgen_layout_archetype:
+		ProcgenLayoutArchetype.CROSSFIRE:
+			return _build_crossfire_blueprint(usable)
+		ProcgenLayoutArchetype.SPLIT_LANES:
+			return _build_split_lanes_blueprint(usable)
+		_:
+			return _build_scatter_blueprint(usable)
+
+func _get_usable_layout_rect() -> Rect2:
+	var half := nav_bounds_size * 0.5
+	var min_pos := Vector2(-half.x + procgen_margin.x, -half.y + procgen_margin.y)
+	var size := Vector2(
+		maxf(nav_bounds_size.x - procgen_margin.x * 2.0, grid_cell_size.x * 8.0),
+		maxf(nav_bounds_size.y - procgen_margin.y * 2.0, grid_cell_size.y * 8.0)
+	)
+	return Rect2(min_pos, size)
+
+func _density_count(base_count: int, bias: float = 1.0) -> int:
+	var scaled := int(round(float(base_count) * procgen_density_multiplier * bias))
+	return maxi(scaled, 1)
+
+func _density_range(min_count: int, max_count: int, bias: float = 1.0) -> Vector2i:
+	var min_scaled := _density_count(maxi(min_count, 1), bias)
+	var max_scaled := _density_count(maxi(max_count, min_scaled), bias)
+	if max_scaled < min_scaled:
+		max_scaled = min_scaled
+	return Vector2i(min_scaled, max_scaled)
+
+func _get_spawn_side_zones() -> Dictionary:
+	var usable := _get_usable_layout_rect()
+	var side_ratio := clampf(spawn_side_width_ratio, 0.15, 0.45)
+	var side_width := usable.size.x * side_ratio
+	var player_zone := Rect2(usable.position, Vector2(side_width, usable.size.y))
+	var enemy_zone := Rect2(
+		Vector2(usable.position.x + usable.size.x - side_width, usable.position.y),
+		Vector2(side_width, usable.size.y)
+	)
+	return {"player": player_zone, "enemy": enemy_zone}
+
+func _constrain_zone_to_spawn_side(zone: Rect2, for_player: bool) -> Rect2:
+	var sides := _get_spawn_side_zones()
+	var side: Rect2 = sides.get("player", _get_usable_layout_rect()) if for_player else sides.get("enemy", _get_usable_layout_rect())
+	var clipped := zone.intersection(side)
+	if clipped.size.x < grid_cell_size.x or clipped.size.y < grid_cell_size.y:
+		return side
+	return clipped
+
+func _build_scatter_blueprint(usable: Rect2) -> Dictionary:
+	var sides := _get_spawn_side_zones()
+	var player_zone: Rect2 = sides.get("player", usable)
+	var enemy_zone: Rect2 = sides.get("enemy", usable)
+	var building_range := _density_range(maxi(building_count_min, 3), maxi(building_count_max, 5), 1.0)
+	var vent_range := _density_range(maxi(vent_count_min, 2), maxi(vent_count_max, 3), 1.0)
+	return {
+		"building_slots": _make_random_slots(usable, building_range.x, building_range.y),
+		"cover_lines": _make_default_cover_specs(usable),
+		"player_slots": [player_zone],
+		"enemy_slots": [enemy_zone],
+		"vent_slots": _make_random_slots(usable, vent_range.x, vent_range.y)
+	}
+
+func _build_crossfire_blueprint(usable: Rect2) -> Dictionary:
+	var mid_x := usable.position.x + usable.size.x * 0.5
+	var mid_y := usable.position.y + usable.size.y * 0.5
+	var lane_h := usable.size.y * 0.32
+	var upper_lane := Rect2(usable.position, Vector2(usable.size.x, lane_h))
+	var lower_lane := Rect2(
+		Vector2(usable.position.x, usable.position.y + usable.size.y - lane_h),
+		Vector2(usable.size.x, lane_h)
+	)
+	var center_band := Rect2(
+		Vector2(usable.position.x + usable.size.x * 0.28, usable.position.y + usable.size.y * 0.26),
+		Vector2(usable.size.x * 0.44, usable.size.y * 0.48)
+	)
+	var player_left := Rect2(usable.position, Vector2(usable.size.x * 0.22, usable.size.y))
+	var enemy_right := Rect2(
+		Vector2(usable.position.x + usable.size.x * 0.78, usable.position.y),
+		Vector2(usable.size.x * 0.22, usable.size.y)
+	)
+	var enemy_right_upper := Rect2(enemy_right.position, Vector2(enemy_right.size.x, upper_lane.size.y))
+	var enemy_right_lower := Rect2(
+		Vector2(enemy_right.position.x, lower_lane.position.y),
+		Vector2(enemy_right.size.x, lower_lane.size.y)
+	)
+	var building_slots := [
+		Rect2(Vector2(mid_x - usable.size.x * 0.16, mid_y - usable.size.y * 0.18), Vector2(usable.size.x * 0.12, usable.size.y * 0.20)),
+		Rect2(Vector2(mid_x + usable.size.x * 0.04, mid_y - usable.size.y * 0.18), Vector2(usable.size.x * 0.12, usable.size.y * 0.20)),
+		Rect2(Vector2(mid_x - usable.size.x * 0.16, mid_y - usable.size.y * 0.02), Vector2(usable.size.x * 0.12, usable.size.y * 0.20)),
+		Rect2(Vector2(mid_x + usable.size.x * 0.04, mid_y - usable.size.y * 0.02), Vector2(usable.size.x * 0.12, usable.size.y * 0.20)),
+		Rect2(Vector2(mid_x - usable.size.x * 0.28, mid_y - usable.size.y * 0.12), Vector2(usable.size.x * 0.09, usable.size.y * 0.16)),
+		Rect2(Vector2(mid_x + usable.size.x * 0.19, mid_y - usable.size.y * 0.12), Vector2(usable.size.x * 0.09, usable.size.y * 0.16))
+	]
+	return {
+		"building_slots": building_slots,
+		"cover_lines": [
+			{"zone": upper_lane, "horizontal": true, "min": _density_count(3, graph_cover_density_bias), "max": _density_count(6, graph_cover_density_bias)},
+			{"zone": lower_lane, "horizontal": true, "min": _density_count(3, graph_cover_density_bias), "max": _density_count(6, graph_cover_density_bias)},
+			{"zone": center_band, "horizontal": false, "min": _density_count(2, graph_cover_density_bias), "max": _density_count(3, graph_cover_density_bias)},
+			{"zone": Rect2(Vector2(usable.position.x + usable.size.x * 0.20, usable.position.y + usable.size.y * 0.18), Vector2(usable.size.x * 0.18, usable.size.y * 0.18)), "horizontal": false, "min": _density_count(2, graph_cover_density_bias), "max": _density_count(4, graph_cover_density_bias)},
+			{"zone": Rect2(Vector2(usable.position.x + usable.size.x * 0.62, usable.position.y + usable.size.y * 0.64), Vector2(usable.size.x * 0.18, usable.size.y * 0.18)), "horizontal": false, "min": _density_count(2, graph_cover_density_bias), "max": _density_count(4, graph_cover_density_bias)}
+		],
+		"player_slots": [player_left],
+		"enemy_slots": [enemy_right, enemy_right_upper, enemy_right_lower],
+		"vent_slots": [center_band, Rect2(Vector2(usable.position.x + usable.size.x * 0.18, usable.position.y + usable.size.y * 0.70), Vector2(usable.size.x * 0.14, usable.size.y * 0.16))]
+	}
+
+func _build_split_lanes_blueprint(usable: Rect2) -> Dictionary:
+	var mid_y := usable.position.y + usable.size.y * 0.5
+	var top_lane := Rect2(usable.position, Vector2(usable.size.x, usable.size.y * 0.38))
+	var bottom_lane := Rect2(
+		Vector2(usable.position.x, usable.position.y + usable.size.y * 0.62),
+		Vector2(usable.size.x, usable.size.y * 0.38)
+	)
+	var spine_band := Rect2(
+		Vector2(usable.position.x + usable.size.x * 0.40, mid_y - usable.size.y * 0.14),
+		Vector2(usable.size.x * 0.20, usable.size.y * 0.28)
+	)
+	var building_slots := [
+		Rect2(Vector2(usable.position.x + usable.size.x * 0.42, usable.position.y + usable.size.y * 0.08), Vector2(usable.size.x * 0.16, usable.size.y * 0.18)),
+		Rect2(Vector2(usable.position.x + usable.size.x * 0.42, usable.position.y + usable.size.y * 0.40), Vector2(usable.size.x * 0.16, usable.size.y * 0.20)),
+		Rect2(Vector2(usable.position.x + usable.size.x * 0.42, usable.position.y + usable.size.y * 0.74), Vector2(usable.size.x * 0.16, usable.size.y * 0.18)),
+		Rect2(Vector2(usable.position.x + usable.size.x * 0.22, usable.position.y + usable.size.y * 0.46), Vector2(usable.size.x * 0.10, usable.size.y * 0.14)),
+		Rect2(Vector2(usable.position.x + usable.size.x * 0.66, usable.position.y + usable.size.y * 0.34), Vector2(usable.size.x * 0.10, usable.size.y * 0.14))
+	]
+	return {
+		"building_slots": building_slots,
+		"cover_lines": [
+			{"zone": top_lane, "horizontal": true, "min": _density_count(3, graph_cover_density_bias), "max": _density_count(5, graph_cover_density_bias)},
+			{"zone": bottom_lane, "horizontal": true, "min": _density_count(3, graph_cover_density_bias), "max": _density_count(5, graph_cover_density_bias)},
+			{"zone": spine_band, "horizontal": false, "min": _density_count(2, graph_cover_density_bias), "max": _density_count(4, graph_cover_density_bias)},
+			{"zone": Rect2(Vector2(usable.position.x + usable.size.x * 0.26, usable.position.y + usable.size.y * 0.18), Vector2(usable.size.x * 0.14, usable.size.y * 0.16)), "horizontal": false, "min": _density_count(2, graph_cover_density_bias), "max": _density_count(3, graph_cover_density_bias)},
+			{"zone": Rect2(Vector2(usable.position.x + usable.size.x * 0.60, usable.position.y + usable.size.y * 0.66), Vector2(usable.size.x * 0.14, usable.size.y * 0.16)), "horizontal": false, "min": _density_count(2, graph_cover_density_bias), "max": _density_count(3, graph_cover_density_bias)}
+		],
+		"player_slots": [Rect2(usable.position, Vector2(usable.size.x * 0.24, usable.size.y))],
+		"enemy_slots": [Rect2(Vector2(usable.position.x + usable.size.x * 0.76, usable.position.y), Vector2(usable.size.x * 0.24, usable.size.y))],
+		"vent_slots": [spine_band, Rect2(Vector2(usable.position.x + usable.size.x * 0.30, mid_y - usable.size.y * 0.10), Vector2(usable.size.x * 0.10, usable.size.y * 0.20)), Rect2(Vector2(usable.position.x + usable.size.x * 0.62, mid_y - usable.size.y * 0.10), Vector2(usable.size.x * 0.10, usable.size.y * 0.20))]
+	}
+
+func _make_default_cover_specs(usable: Rect2) -> Array:
+	return [
+		{"zone": Rect2(usable.position, Vector2(usable.size.x, usable.size.y * 0.35)), "horizontal": true, "min": _density_count(3, graph_cover_density_bias), "max": _density_count(6, graph_cover_density_bias)},
+		{"zone": Rect2(Vector2(usable.position.x, usable.position.y + usable.size.y * 0.65), Vector2(usable.size.x, usable.size.y * 0.35)), "horizontal": true, "min": _density_count(3, graph_cover_density_bias), "max": _density_count(6, graph_cover_density_bias)},
+		{"zone": Rect2(Vector2(usable.position.x + usable.size.x * 0.40, usable.position.y + usable.size.y * 0.25), Vector2(usable.size.x * 0.20, usable.size.y * 0.50)), "horizontal": false, "min": _density_count(2, graph_cover_density_bias), "max": _density_count(4, graph_cover_density_bias)}
+	]
+
+func _make_random_slots(usable: Rect2, min_count: int, max_count: int) -> Array:
+	var slots: Array = []
+	var low := maxi(min_count, 1)
+	var high := maxi(max_count, low)
+	var count := _rng.randi_range(low, high)
+	for _i in range(count):
+		var slot_size := Vector2(
+			_rng.randf_range(grid_cell_size.x * 1.5, grid_cell_size.x * 4.0),
+			_rng.randf_range(grid_cell_size.y * 1.5, grid_cell_size.y * 4.0)
+		)
+		var pos := Vector2(
+			_rng.randf_range(usable.position.x, usable.position.x + usable.size.x - slot_size.x),
+			_rng.randf_range(usable.position.y, usable.position.y + usable.size.y - slot_size.y)
+		)
+		slots.append(Rect2(pos, slot_size))
+	return slots
+
+func _resize_node_pool(source_nodes: Array[Node], desired_count: int) -> void:
+	if source_nodes.is_empty():
+		return
+	var template := source_nodes[0]
+	if desired_count < source_nodes.size():
+		for i in range(desired_count, source_nodes.size()):
+			var extra := source_nodes[i]
+			if extra:
+				extra.queue_free()
+	elif desired_count > source_nodes.size():
+		for i in range(desired_count - source_nodes.size()):
+			var clone_any := template.duplicate()
+			if not (clone_any is Node):
+				continue
+			var clone: Node = clone_any
+			clone.name = "%s_%s" % [template.name, i + 1]
+			add_child(clone)
+
+func _place_buildings_from_blueprint(blueprint: Dictionary) -> void:
+	var slots_raw: Array = blueprint.get("building_slots", [])
+	var desired_buildings: int = slots_raw.size()
+	var obstacles: Array[Node] = _get_building_obstacles()
+	if obstacles.is_empty():
+		return
+	if allow_building_spawn:
+		_resize_node_pool(obstacles, desired_buildings)
+		obstacles = _get_building_obstacles()
+	var placed_rects: Array[Rect2] = []
+	var slot_count: int = maxi(slots_raw.size(), 1)
+	for i in range(obstacles.size()):
+		var zone := obstacles[i] as Node3D
+		if not zone:
+			continue
+		var rect := _get_obstacle_rect(zone)
+		if rect.size == Vector2.ZERO:
+			continue
+		var slot: Rect2 = slots_raw[i % slot_count] if not slots_raw.is_empty() else _get_usable_layout_rect()
+		var placed := _try_place_rect_in_zone(rect.size, placed_rects, slot)
+		if not _is_valid_position(placed):
+			placed = _try_place_rect(rect.size, placed_rects)
+		if _is_valid_position(placed):
+			zone.global_position = Vector3(placed.x, 0.0, placed.y)
+			placed_rects.append(Rect2(placed - rect.size * 0.5, rect.size))
+
+func _place_cover_from_blueprint(blueprint: Dictionary) -> void:
+	var cover_specs: Array = blueprint.get("cover_lines", [])
+	var cover_nodes: Array[Node] = _get_cover_segments_nodes()
+	if cover_nodes.is_empty() or not allow_cover_spawn:
+		return
+	var desired_segments: int = 0
+	var line_lengths: Array[int] = []
+	for i in range(cover_specs.size()):
+		var spec_any: Variant = cover_specs[i]
+		if not (spec_any is Dictionary):
+			continue
+		var spec: Dictionary = spec_any
+		var seg_min := int(spec.get("min", cover_segments_per_line_min))
+		var seg_max := int(spec.get("max", cover_segments_per_line_max))
+		if seg_max < seg_min:
+			var temp := seg_max
+			seg_max = seg_min
+			seg_min = temp
+		var length := _rng.randi_range(maxi(seg_min, 1), maxi(seg_max, 1))
+		line_lengths.append(length)
+		desired_segments += length
+	_resize_cover_pool(cover_nodes, desired_segments)
+	cover_nodes = _get_cover_segments_nodes()
+	var cursor: int = 0
+	for i in range(cover_specs.size()):
+		if cursor >= cover_nodes.size():
+			break
+		var spec_any: Variant = cover_specs[i]
+		if not (spec_any is Dictionary):
+			continue
+		var spec: Dictionary = spec_any
+		var zone: Rect2 = spec.get("zone", _get_usable_layout_rect())
+		var horizontal := bool(spec.get("horizontal", true))
+		var line_length := line_lengths[i] if i < line_lengths.size() else 1
+		var center := _pick_position_in_zone(zone)
+		if not _is_valid_position(center):
+			continue
+		var center_index := 0.5 * float(line_length - 1)
+		for segment_idx in range(line_length):
+			if cursor >= cover_nodes.size():
+				break
+			var node := cover_nodes[cursor]
+			cursor += 1
+			if not (node is Node3D):
+				continue
+			var offset_cells := float(segment_idx) - center_index
+			var offset := Vector2(offset_cells * grid_cell_size.x, 0.0) if horizontal else Vector2(0.0, offset_cells * grid_cell_size.y)
+			var pos := _snap_to_grid(center + offset)
+			if not zone.grow(-grid_cell_size.x * 0.5).has_point(pos):
+				node.queue_free()
+				continue
+			if _is_point_inside_obstacle(pos):
+				node.queue_free()
+				continue
+			var cover_3d := node as Node3D
+			cover_3d.global_position = Vector3(pos.x, 0.0, pos.y)
+			cover_3d.rotation = Vector3(0.0, 0.0, 0.0) if horizontal else Vector3(0.0, PI * 0.5, 0.0)
+	for leftover in range(cursor, cover_nodes.size()):
+		var node := cover_nodes[leftover]
+		if node:
+			node.queue_free()
+
+func _place_players_from_blueprint(blueprint: Dictionary) -> void:
+	var players: Array = _get_players()
+	if players.is_empty():
+		return
+	var slots: Array = blueprint.get("player_slots", [])
+	var placed: Array[Vector2] = []
+	var slot_count: int = maxi(slots.size(), 1)
+	for i in range(players.size()):
+		var player_node: Node = players[i] as Node
+		if not (player_node is Node3D):
+			continue
+		var raw_zone: Rect2 = slots[i % slot_count] if not slots.is_empty() else _get_usable_layout_rect()
+		var zone: Rect2 = _constrain_zone_to_spawn_side(raw_zone, true)
+		var pos := _pick_position_in_zone(zone, placed, min_player_spacing, min_player_obstacle_spacing)
+		if not _is_valid_position(pos):
+			pos = _pick_position(placed, min_player_spacing, min_player_obstacle_spacing)
+		if _is_valid_position(pos):
+			(player_node as Node3D).global_position = Vector3(pos.x, 0.0, pos.y)
+			placed.append(pos)
+
+func _place_enemies_from_blueprint(blueprint: Dictionary) -> void:
+	var existing := get_tree().get_nodes_in_group("enemy")
+	for i in range(existing.size(), enemy_count):
+		var enemy := ENEMY_SCENE.instantiate()
+		add_child(enemy)
+	for i in range(enemy_count, existing.size()):
+		var extra := existing[i]
+		if extra:
+			extra.queue_free()
+	var enemies: Array = get_tree().get_nodes_in_group("enemy")
+	var slots: Array = blueprint.get("enemy_slots", [])
+	var slot_count: int = maxi(slots.size(), 1)
+	var placed: Array[Vector2] = []
+	var player_positions: Array[Vector2] = []
+	for player in _get_players():
+		if player is Node3D:
+			var p3: Vector3 = (player as Node3D).global_position
+			player_positions.append(Vector2(p3.x, p3.z))
+	for i in range(enemies.size()):
+		var enemy_node: Node = enemies[i] as Node
+		if not (enemy_node is Node3D):
+			continue
+		var raw_zone: Rect2 = slots[i % slot_count] if not slots.is_empty() else _get_usable_layout_rect()
+		var zone: Rect2 = _constrain_zone_to_spawn_side(raw_zone, false)
+		var avoid := placed.duplicate()
+		for player_pos in player_positions:
+			avoid.append(player_pos)
+		var pos := _pick_position_in_zone(zone, avoid, min_enemy_spacing, min_player_obstacle_spacing)
+		if not _is_valid_position(pos):
+			pos = _pick_position(avoid, min_enemy_spacing, min_player_obstacle_spacing)
+		if _is_valid_position(pos):
+			(enemy_node as Node3D).global_position = Vector3(pos.x, 0.0, pos.y)
+			placed.append(pos)
+
+func _place_vents_from_blueprint(blueprint: Dictionary) -> void:
+	var vents: Array[Node] = _get_steam_vents()
+	if vents.is_empty():
+		return
+	var slots: Array = blueprint.get("vent_slots", [])
+	var desired: int = slots.size()
+	if allow_vent_spawn and desired > 0:
+		_resize_node_pool(vents, desired)
+		vents = _get_steam_vents()
+	var slot_count: int = maxi(slots.size(), 1)
+	var avoid_points: Array[Vector2] = []
+	var player_pos := _get_primary_player_pos()
+	var enemies := get_tree().get_nodes_in_group("enemy")
+	for enemy in enemies:
+		if enemy is Node3D:
+			var ep: Vector3 = (enemy as Node3D).global_position
+			avoid_points.append(Vector2(ep.x, ep.z))
+	var placed_vents: Array[Vector2] = []
+	for i in range(vents.size()):
+		var vent := vents[i]
+		if not (vent is Node3D):
+			continue
+		var zone: Rect2 = slots[i % slot_count] if not slots.is_empty() else _get_usable_layout_rect()
+		var pos := _pick_vent_position_in_zone(zone, avoid_points, placed_vents, player_pos)
+		if not _is_valid_position(pos):
+			pos = _pick_vent_position(avoid_points, placed_vents, player_pos)
+		if _is_valid_position(pos):
+			(vent as Node3D).global_position = Vector3(pos.x, 0.0, pos.y)
+			placed_vents.append(pos)
+
+func _try_place_rect_in_zone(size: Vector2, placed_rects: Array[Rect2], zone: Rect2) -> Vector2:
+	var attempts := maxi(procgen_attempts, 12)
+	for _i in range(attempts):
+		var pos := _snap_to_grid(_random_position_in_rect_for_size(zone, size))
+		if not zone.grow(-grid_cell_size.x * 0.5).has_point(pos):
+			continue
+		var rect := Rect2(pos - size * 0.5, size)
+		if _rects_overlap(rect, placed_rects, obstacle_spacing * 0.5):
+			continue
+		return pos
+	return INVALID_POS
+
+func _random_position_in_rect_for_size(zone: Rect2, size: Vector2) -> Vector2:
+	var min_x := zone.position.x + size.x * 0.5
+	var max_x := zone.position.x + zone.size.x - size.x * 0.5
+	var min_y := zone.position.y + size.y * 0.5
+	var max_y := zone.position.y + zone.size.y - size.y * 0.5
+	if min_x > max_x:
+		min_x = zone.position.x
+		max_x = zone.position.x + zone.size.x
+	if min_y > max_y:
+		min_y = zone.position.y
+		max_y = zone.position.y + zone.size.y
+	return Vector2(_rng.randf_range(min_x, max_x), _rng.randf_range(min_y, max_y))
+
+func _pick_position_in_zone(zone: Rect2, avoid_points: Array[Vector2] = [], min_spacing: float = 0.0, min_obstacle_spacing: float = 0.0) -> Vector2:
+	var attempts := maxi(procgen_attempts, 12)
+	var best_pos := INVALID_POS
+	var best_score := -1.0
+	for _i in range(attempts):
+		var pos := _snap_to_grid(_random_position_in_rect_for_size(zone, Vector2.ZERO))
+		if not zone.grow(-grid_cell_size.x * 0.5).has_point(pos):
+			continue
+		if _is_point_inside_obstacle(pos):
+			continue
+		if min_obstacle_spacing > 0.0 and _is_near_obstacle(pos, min_obstacle_spacing):
+			continue
+		if min_spacing > 0.0 and _is_near_points(pos, avoid_points, min_spacing):
+			continue
+		return pos
+	for _i in range(attempts):
+		var pos_relaxed := _snap_to_grid(_random_position_in_rect_for_size(zone, Vector2.ZERO))
+		if _is_point_inside_obstacle(pos_relaxed):
+			continue
+		var score := _score_position(pos_relaxed, avoid_points)
+		if score > best_score:
+			best_score = score
+			best_pos = pos_relaxed
+	return best_pos
+
+func _pick_vent_position_in_zone(zone: Rect2, avoid_points: Array[Vector2], placed_vents: Array[Vector2], player_pos: Vector2) -> Vector2:
+	var attempts := maxi(procgen_attempts, 12)
+	for _i in range(attempts):
+		var pos := _snap_to_grid(_random_position_in_rect_for_size(zone, Vector2.ZERO))
+		if not zone.grow(-grid_cell_size.x * 0.5).has_point(pos):
+			continue
+		if _is_point_inside_obstacle(pos):
+			continue
+		if min_vent_obstacle_spacing > 0.0 and _is_near_obstacle(pos, min_vent_obstacle_spacing):
+			continue
+		if min_vent_enemy_spacing > 0.0 and _is_near_points(pos, avoid_points, min_vent_enemy_spacing):
+			continue
+		if min_vent_spacing > 0.0 and _is_near_points(pos, placed_vents, min_vent_spacing):
+			continue
+		if _is_valid_position(player_pos) and pos.distance_to(player_pos) < min_vent_player_spacing:
+			continue
+		return pos
+	return INVALID_POS
 
 func _ensure_squad_size() -> void:
 	var desired := maxi(squad_size, 1)
@@ -528,6 +981,7 @@ func _randomize_cover_segments() -> void:
 				continue
 			var cover_3d := cover_node as Node3D
 			cover_3d.global_position = Vector3(pos.x, 0.0, pos.y)
+			cover_3d.rotation = Vector3(0.0, 0.0, 0.0) if horizontal else Vector3(0.0, PI * 0.5, 0.0)
 			var segment_rect := _get_obstacle_rect(cover_node)
 			if segment_rect.size != Vector2.ZERO:
 				placed_rects.append(segment_rect)
@@ -637,6 +1091,8 @@ func _spawn_enemies() -> void:
 		if extra:
 			extra.queue_free()
 	var enemies := get_tree().get_nodes_in_group("enemy")
+	var sides := _get_spawn_side_zones()
+	var enemy_zone: Rect2 = sides.get("enemy", _get_usable_layout_rect())
 	var placed: Array[Vector2] = []
 	var player_positions: Array[Vector2] = []
 	for player in _get_players():
@@ -651,7 +1107,9 @@ func _spawn_enemies() -> void:
 		for player_pos in player_positions:
 			if _is_valid_position(player_pos):
 				avoid.append(player_pos)
-		var pos: Vector2 = _pick_position(avoid, min_enemy_spacing, min_player_obstacle_spacing)
+		var pos: Vector2 = _pick_position_in_zone(enemy_zone, avoid, min_enemy_spacing, min_player_obstacle_spacing)
+		if not _is_valid_position(pos):
+			pos = _pick_position(avoid, min_enemy_spacing, min_player_obstacle_spacing)
 		if _is_valid_position(pos):
 			node.global_position = Vector3(pos.x, 0, pos.y)
 			placed.append(pos)
@@ -660,11 +1118,15 @@ func _position_players() -> void:
 	var players := _get_players()
 	if players.is_empty():
 		return
+	var sides := _get_spawn_side_zones()
+	var player_zone: Rect2 = sides.get("player", _get_usable_layout_rect())
 	var placed: Array[Vector2] = []
 	for player in players:
 		if not (player is Node3D):
 			continue
-		var pos: Vector2 = _pick_position(placed, min_player_spacing, min_player_obstacle_spacing)
+		var pos: Vector2 = _pick_position_in_zone(player_zone, placed, min_player_spacing, min_player_obstacle_spacing)
+		if not _is_valid_position(pos):
+			pos = _pick_position(placed, min_player_spacing, min_player_obstacle_spacing)
 		if _is_valid_position(pos):
 			(player as Node3D).global_position = Vector3(pos.x, 0, pos.y)
 			placed.append(pos)
@@ -764,6 +1226,42 @@ func _is_generated_layout_playable() -> bool:
 	if require_cover_variety and pair_cover_or_blocked == 0:
 		return false
 	return true
+
+func _has_tactical_lane_variety() -> bool:
+	if not require_lane_variety:
+		return true
+	var players := _get_players()
+	var enemies := get_tree().get_nodes_in_group("enemy")
+	if players.is_empty() or enemies.is_empty():
+		return false
+	var has_fast_lane := false
+	var has_open_trade := false
+	var has_protected_trade := false
+	for player in players:
+		if not (player is Node3D):
+			continue
+		var player_pos3: Vector3 = (player as Node3D).global_position
+		var player_pos2 := Vector2(player_pos3.x, player_pos3.z)
+		for enemy in enemies:
+			if not (enemy is Node3D):
+				continue
+			var enemy_pos3: Vector3 = (enemy as Node3D).global_position
+			var enemy_pos2 := Vector2(enemy_pos3.x, enemy_pos3.z)
+			var path := get_astar_path(player_pos2, enemy_pos2)
+			if path.size() > 1 and path.size() - 1 <= 8:
+				has_fast_lane = true
+			var shot := get_shot_resolution(player_pos3, enemy_pos3)
+			if bool(shot.get("blocked", false)):
+				has_protected_trade = true
+				continue
+			var multiplier := float(shot.get("damage_multiplier", 1.0))
+			if multiplier < 1.0:
+				has_protected_trade = true
+			else:
+				has_open_trade = true
+			if has_fast_lane and has_open_trade and has_protected_trade:
+				return true
+	return has_fast_lane and has_open_trade and has_protected_trade
 
 func _random_position_in_bounds() -> Vector2:
 	var half := nav_bounds_size * 0.5
